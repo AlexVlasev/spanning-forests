@@ -257,7 +257,7 @@ class Solver:
 
         return variables, reverse_variables, var_map
 
-    def get_equations(self, phi_P, phi_Q, sfps_P, sfps_Q):
+    def get_equations(self, phi_P, phi_Q, sfps_P, sfps_Q, chunk_edges=6):
         """
         Builds the linear system for the a(i,j) in
 
@@ -267,28 +267,36 @@ class Solver:
         both sides agree. Each equation is returned as a pair (row, constant)
         where row holds the coefficient of each a(i,j), in the order of
         get_abstract_vars, reduced by their gcd. Duplicates are dropped.
+
+        To limit memory, monomials are processed in chunks according to which
+        of the first chunk_edges edges they contain, and which of those are
+        squared. The product monomial (a | b, a & b) lands in the chunk
+        (x | y, x & y), where x and y are the parts of a and b on those edges,
+        so sorting the terms of every polynomial by that part lets each chunk
+        multiply only its own terms. Every pair of terms is still multiplied
+        exactly once.
         """
         self.debug(f'\nMultiplying P, Q polynomial pairs: {len(sfps_P) * len(sfps_Q) + 1}')
-        lhs = self._multiply(self._masks(phi_P), self._masks(phi_Q))
+        chunk_mask = (1 << min(chunk_edges, self.num_edges)) - 1
+
+        # Factor 0 is the left hand side, and factor k + 1 multiplies a(i,j) number k
         masks_P = [self._masks(poly) for _, poly in sfps_P]
         masks_Q = [self._masks(poly) for _, poly in sfps_Q]
+        factors = [(self._masks(phi_P), self._masks(phi_Q))]
+        factors.extend(itertools.product(masks_P, masks_Q))
+        buckets = [(self._bucket(a, chunk_mask), self._bucket(b, chunk_mask)) for a, b in factors]
 
-        # The sparse row of each monomial: (index of a(i,j), coefficient) pairs
-        rows = {monomial: [] for monomial in lhs}
-        for k, (terms_P, terms_Q) in enumerate(itertools.product(masks_P, masks_Q)):
-            for monomial, c in self._multiply(terms_P, terms_Q).items():
-                rows.setdefault(monomial, []).append((k, c))
+        chunks = dict()
+        for x in range(chunk_mask + 1):
+            for y in range(chunk_mask + 1):
+                chunks.setdefault((x | y, x & y), []).append((x, y))
 
-        self.debug(f'Removing duplicate equations from {len(rows)} equations')
+        self.debug(f'Building equations in {len(chunks)} chunks')
         sparse_equations = set()
-        for monomial, entries in rows.items():
-            constant = lhs.get(monomial, 0)
-            gcd = math.gcd(*(c for _, c in entries), constant)
-            if gcd == 0:
-                continue
-            sparse_equations.add((tuple((k, c // gcd) for k, c in entries), constant // gcd))
+        for pairs in chunks.values():
+            sparse_equations.update(self._chunk_equations(buckets, pairs))
 
-        num_vars = len(masks_P) * len(masks_Q)
+        num_vars = len(factors) - 1
         equations = set()
         for entries, constant in sparse_equations:
             row = [0] * num_vars
@@ -298,6 +306,41 @@ class Solver:
 
         self.debug(f'Remaining equations: {len(equations)}')
         return equations
+
+    def _chunk_equations(self, buckets, pairs):
+        """
+        The equations of get_equations for the monomials in one chunk, with
+        sparse rows of (index of a(i,j), coefficient) pairs.
+        """
+        products = []
+        for buckets_a, buckets_b in buckets:
+            product = dict()
+            for x, y in pairs:
+                self._multiply_into(product, buckets_a.get(x, ()), buckets_b.get(y, ()))
+            products.append(product)
+
+        lhs = products[0]
+        rows = {monomial: [] for monomial in lhs}
+        for k, product in enumerate(products[1:]):
+            for monomial, c in product.items():
+                rows.setdefault(monomial, []).append((k, c))
+
+        equations = set()
+        for monomial, entries in rows.items():
+            constant = lhs.get(monomial, 0)
+            gcd = math.gcd(*(c for _, c in entries), constant)
+            if gcd == 0:
+                continue
+            equations.add((tuple((k, c // gcd) for k, c in entries), constant // gcd))
+        return equations
+
+    @staticmethod
+    def _bucket(terms, mask):
+        """Sorts terms from _masks by which of the edges in mask they contain."""
+        buckets = dict()
+        for term in terms:
+            buckets.setdefault(term[0] & mask, []).append(term)
+        return buckets
 
     @staticmethod
     def _masks(poly):
@@ -314,18 +357,16 @@ class Solver:
         return terms
 
     @staticmethod
-    def _multiply(terms_a, terms_b):
+    def _multiply_into(product, terms_a, terms_b):
         """
-        Multiplies two polynomials given by _masks. Each monomial of the
-        product is identified by the pair (a | b, a & b): its edges, and
-        which of those are squared.
+        Adds the product of two polynomials given by _masks into product.
+        Each monomial of the product is identified by the pair
+        (a | b, a & b): its edges, and which of those are squared.
         """
-        product = dict()
         for a, c in terms_a:
             for b, d in terms_b:
                 key = (a | b, a & b)
                 product[key] = product.get(key, 0) + c * d
-        return product
 
     @staticmethod
     def _terms(poly):

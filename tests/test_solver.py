@@ -60,6 +60,19 @@ def test_numeric_and_symbolic_systems_agree(name, marked, P, Q, reduce, dimensio
     assert solver.solve_system(numeric, a_vars) == solver.solve_system(symbolic, a_vars)
 
 
+@pytest.mark.parametrize(
+    'name, marked, P, Q', [('K5', [0, 1, 2], '111', '123'), ('PRISM', [0, 1, 2, 3], '1111', '1234')]
+)
+def test_chunking_does_not_change_equations(name, marked, P, Q):
+    solver = make_solver(GRAPHS[name], marked)
+    phi_P, phi_Q = solver.get_lhs(P, Q)
+    sfps_P, sfps_Q = solver.get_rhs(P, Q, reduce=True)
+
+    unchunked = solver.get_equations(phi_P, phi_Q, sfps_P, sfps_Q, chunk_edges=0)
+    for chunk_edges in (2, 6):
+        assert solver.get_equations(phi_P, phi_Q, sfps_P, sfps_Q, chunk_edges) == unchunked
+
+
 @pytest.mark.parametrize('name, marked, P, Q, reduce, dimension', CASES)
 def test_verify_solution(name, marked, P, Q, reduce, dimension):
     solver, solution = solve(name, marked, P, Q, reduce)
