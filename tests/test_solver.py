@@ -4,7 +4,8 @@ import pytest
 import sympy
 
 from helpers import GRAPHS, adjacency, assert_identity, make_solver
-from identities import IdentitySolver
+from identities import IdentitySolver, _crt, _evaluate_all, _evaluate_all_numpy
+from polynomial import Polynomial
 
 CASES = [
     # name, marked, P, Q, reduce, expected dimension of the solution space
@@ -71,6 +72,29 @@ def test_chunking_and_numpy_do_not_change_equations(name, marked, P, Q):
     for use_numpy in (False, True):
         for chunk_edges in (0, 2, 6, 8):
             assert solver.get_equations(*polys, chunk_edges, use_numpy) == expected
+
+
+@pytest.mark.parametrize('name, marked, P, Q, reduce, dimension', CASES)
+def test_numpy_evaluation_gives_the_same_numeric_equations(name, marked, P, Q, reduce, dimension):
+    solver = make_solver(GRAPHS[name], marked)
+    polys = (*solver.get_lhs(P, Q), *solver.get_rhs(P, Q, reduce))
+    expected = solver.get_numeric_equations(*polys, use_numpy=False)
+    assert solver.get_numeric_equations(*polys, use_numpy=True) == expected
+
+
+def test_numpy_evaluation_with_negative_and_large_coefficients():
+    variables = ['x', 'y', 'z']
+    coefficients = {(1, 1, 0): -3, (0, 2, 1): 10**30, (0, 0, 0): -(10**25), (1, 0, 0): 7}
+    poly = Polynomial(variables, coefficients)
+    points = [[1, 2, 3], [1000, 999, 998], [5, 1, 1000]]
+    assert _evaluate_all_numpy(poly, points) == _evaluate_all(poly, points)
+    assert _evaluate_all_numpy(Polynomial(variables, {}), points) == [0, 0, 0]
+
+
+def test_crt():
+    primes = [7, 11, 13]
+    for value in (0, 1, 500, 1000):
+        assert _crt([value % p for p in primes], primes) == value
 
 
 def test_numpy_equations_with_coefficients_other_than_one():

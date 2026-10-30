@@ -19,6 +19,14 @@ import sympy as sym
 # without squares have keys below 3**num_edges, which fits in a uint64 up to 40 edges
 MAX_NUMPY_EDGES = 40
 
+# Random points have coordinates from 1 to MAX_POINT
+MAX_POINT = 1000
+
+# Primes below 2**31 for evaluating modulo p, so that products of two residues fit in an int64
+EVALUATION_PRIMES = [2**31 - 1]
+while len(EVALUATION_PRIMES) < 16:
+    EVALUATION_PRIMES.append(sym.prevprime(EVALUATION_PRIMES[-1]))
+
 
 class IdentitySolver:
     def __init__(self, graph, marked, verbose=False):
@@ -128,7 +136,9 @@ class IdentitySolver:
         self.debug(f'Remaining equations: {len(equations)}')
         return equations
 
-    def get_numeric_equations(self, phi_P, phi_Q, sfps_P, sfps_Q, extra_points=10, seed=0):
+    def get_numeric_equations(
+        self, phi_P, phi_Q, sfps_P, sfps_Q, extra_points=10, seed=0, use_numpy=True
+    ):
         """
         Builds a linear system for the a(i,j) in
 
@@ -141,21 +151,28 @@ class IdentitySolver:
         get_equations, so with a few more points than unknowns both systems
         have the same solutions, except with vanishingly small probability.
         Use verify_solution to confirm a solution symbolically.
+
+        With use_numpy, the polynomials are evaluated at all points at once,
+        modulo a few primes, and the exact values recovered with the Chinese
+        remainder theorem. Otherwise they are evaluated one point at a time.
         """
         num_points = len(sfps_P) * len(sfps_Q) + extra_points
         self.debug(f'Evaluating polynomials at {num_points} random points')
         rng = random.Random(seed)
-        terms_lhs = [_terms(phi_P), _terms(phi_Q)]
-        terms_P = [_terms(poly) for _, poly in sfps_P]
-        terms_Q = [_terms(poly) for _, poly in sfps_Q]
+        points = [
+            [rng.randint(1, MAX_POINT) for _ in range(self.graph.num_edges)]
+            for _ in range(num_points)
+        ]
+
+        evaluate = _evaluate_all_numpy if use_numpy else _evaluate_all
+        values_lhs = [evaluate(poly, points) for poly in (phi_P, phi_Q)]
+        values_P = [evaluate(poly, points) for _, poly in sfps_P]
+        values_Q = [evaluate(poly, points) for _, poly in sfps_Q]
 
         equations = []
-        for _ in range(num_points):
-            point = [rng.randint(1, 1000) for _ in range(self.graph.num_edges)]
-            values_P = [_evaluate(terms, point) for terms in terms_P]
-            values_Q = [_evaluate(terms, point) for terms in terms_Q]
-            row = tuple(p * q for p in values_P for q in values_Q)
-            constant = math.prod(_evaluate(terms, point) for terms in terms_lhs)
+        for i in range(num_points):
+            row = tuple(p[i] * q[i] for p in values_P for q in values_Q)
+            constant = values_lhs[0][i] * values_lhs[1][i]
             equations.append((row, constant))
         return equations
 
@@ -431,3 +448,64 @@ def _terms(poly):
 
 def _evaluate(terms, point):
     return sum(c * math.prod(point[e] for e in edges) for c, edges in terms)
+
+
+def _evaluate_all(poly, points):
+    """The exact values of a polynomial at each point, one point at a time."""
+    terms = _terms(poly)
+    return [_evaluate(terms, point) for point in points]
+
+
+def _evaluate_all_numpy(poly, points, block_size=2**22):
+    """
+    The exact values of a polynomial at each point. The polynomial is
+    evaluated at all points at once modulo enough primes that their product
+    exceeds twice the largest possible absolute value, and the exact values
+    are recovered with the Chinese remainder theorem.
+    """
+    terms = _terms(poly)
+    if not terms:
+        return [0] * len(points)
+
+    # Pad every term to the same degree with an extra coordinate equal to 1
+    degree = max(len(edges) for _, edges in terms)
+    num_edges = len(points[0])
+    index = np.full((len(terms), degree), num_edges, dtype=np.int64)
+    for t, (_, edges) in enumerate(terms):
+        index[t, : len(edges)] = edges
+    coordinates = np.array([[*point, 1] for point in points], dtype=np.int64)
+
+    bound = 2 * sum(abs(c) for c, _ in terms) * max(map(max, points)) ** degree
+    primes = []
+    while math.prod(primes) <= bound:
+        primes.append(EVALUATION_PRIMES[len(primes)])
+
+    # Evaluate in blocks of terms to bound the size of the (points, terms) arrays
+    step = max(1, block_size // len(points))
+    residues = []
+    for p in primes:
+        coeffs = np.array([c % p for c, _ in terms], dtype=np.int64)
+        total = np.zeros(len(points), dtype=np.int64)
+        for start in range(0, len(terms), step):
+            block = index[start : start + step]
+            values = coeffs[start : start + step] * np.ones((len(points), 1), dtype=np.int64)
+            for d in range(degree):
+                values = values * coordinates[:, block[:, d]] % p
+            total = (total + values.sum(axis=1)) % p
+        residues.append(total)
+
+    modulus = math.prod(primes)
+    exact = []
+    for i in range(len(points)):
+        value = _crt([int(r[i]) for r in residues], primes)
+        exact.append(value - modulus if value > modulus // 2 else value)
+    return exact
+
+
+def _crt(residues, primes):
+    """The integer modulo the product of the primes with the given residues."""
+    value, modulus = 0, 1
+    for r, p in zip(residues, primes):
+        value += modulus * ((r - value) * pow(modulus, -1, p) % p)
+        modulus *= p
+    return value
