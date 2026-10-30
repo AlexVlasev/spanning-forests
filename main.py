@@ -81,14 +81,20 @@ def main(argv=None):
     solver = IdentitySolver(Graph(args.graph), marked, verbose=not args.quiet)
     solution = solver.solve_problem(args.P, args.Q, reduce=args.reduce, verify=args.verify)
 
-    if solution is not None:
-        print(f'\nphi_{args.P} * phi_{args.Q} =')
-        for (p, q), c in solution.items():
-            if c != 0:
-                print(f'    + ({c}) * phi_{p} * phi_{q}')
+    print('\n====================================\n')
+    if solution is None:
+        print('No Solution')
+    else:
+        print(solution.report())
+        print('\n====================================\n')
+        print(solution.identity())
+        if solution.verified is True:
+            print('\nVerified symbolically')
+        elif solution.verified is False:
+            print('\nSymbolic verification FAILED')
 
     print(f'\nComputation took: {time() - start:.2f} sec')
-    return 0 if solution is not None else 1
+    return 0 if solution is not None and solution.verified is not False else 1
 
 
 if __name__ == '__main__':

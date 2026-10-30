@@ -42,11 +42,15 @@ from identities import IdentitySolver
 
 solver = IdentitySolver(Graph(complete_graph(6)), marked=[0, 1, 2, 3])
 
-# Maps (P_i, Q_j) pattern pairs to coefficients, which may contain free parameters
 solution = solver.solve_problem('1111', '1234', reduce=True, verify=True)
+solution.coefficients  # maps (P_i, Q_j) pattern pairs to coefficients, with free parameters
+solution.dimension     # 8
+solution.verified      # True
+print(solution.report())
+print(solution.identity())
 ```
 
-`solve_problem` prints each coefficient as free, fixed (a nonzero constant), dependent (determined by the free ones) or forbidden (always 0), along with a count of each.
+`solve_problem` returns a `Solution`, or `None` if there is no identity. `report()` lists each coefficient as free, fixed (a nonzero constant), dependent (determined by the free ones) or forbidden (always 0), along with a count of each, and `identity()` writes out the identity in terms of the partitions.
 
 ## Results so far
 

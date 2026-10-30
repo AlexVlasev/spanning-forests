@@ -15,6 +15,8 @@ import random
 import numpy as np
 import sympy as sym
 
+from solution import Solution
+
 # Monomial keys sum exponent * 3**e over edges e, and products of monomials
 # without squares have keys below 3**num_edges, which fits in a uint64 up to 40 edges
 MAX_NUMPY_EDGES = 40
@@ -176,39 +178,47 @@ class IdentitySolver:
             equations.append((row, constant))
         return equations
 
-    def verify_solution(self, P, Q, solution, reduce=False):
+    def verify_solution(self, solution, reduce=False):
         """
         Confirms symbolically that every member of a solution family returned
         by solve_problem satisfies the identity, using the exact system of
         get_equations.
         """
-        phi_P, phi_Q = self.get_lhs(P, Q)
-        sfps_P, sfps_Q = self.get_rhs(P, Q, reduce=reduce)
+        phi_P, phi_Q = self.get_lhs(solution.P, solution.Q)
+        sfps_P, sfps_Q = self.get_rhs(solution.P, solution.Q, reduce=reduce)
         return self._verify(phi_P, phi_Q, sfps_P, sfps_Q, solution)
 
     def _verify(self, phi_P, phi_Q, sfps_P, sfps_Q, solution):
         self.debug('Verifying solution symbolically')
-        coefficients = [solution[(p, q)] for p, _ in sfps_P for q, _ in sfps_Q]
+        coefficients = [solution.coefficients[(p, q)] for p, _ in sfps_P for q, _ in sfps_Q]
         for row, constant in self.get_equations(phi_P, phi_Q, sfps_P, sfps_Q):
             lhs = sum((r * c for r, c in zip(row, coefficients) if r), sym.Integer(0))
             if sym.expand(lhs - constant) != 0:
                 return False
         return True
 
-    def solve_system(self, equations, a_vars):
+    def solve_system(self, equations, num_vars):
+        """
+        The general solution of a linear system of (row, constant) equations,
+        as a tuple of sympy expressions in free parameters x_0, x_1, ..., or
+        None if there is no solution.
+        """
         self.debug(f'Solving linear system')
-        xs = sym.symbols(f'x_:{len(a_vars)}')
+        xs = sym.symbols(f'x_:{num_vars}')
         # Sort to keep the parametrization of the solution reproducible
         equations = sorted(equations)
         A = sym.Matrix([row for row, _ in equations])
         b = sym.Matrix([constant for _, constant in equations])
-        return sym.linsolve((A, b), xs)
+        solutions = sym.linsolve((A, b), xs)
+        # linsolve returns either EmptySet or a FiniteSet with one parametric solution
+        return solutions.args[0].args if solutions.args else None
 
     def solve_problem(self, P, Q, reduce=False, verify=False):
         """
-        Finds the family of identities phi_P * phi_Q = sum of a(i,j) * phi_P_k * phi_Q_k
-        from random evaluations. With verify=True the family is also
-        confirmed symbolically, which is much slower.
+        Finds the family of identities phi_P * phi_Q = sum of c * phi_P_i * phi_Q_j
+        from random evaluations, as a Solution, or None if there is none.
+        With verify=True the family is also confirmed symbolically, which is
+        much slower, and the result stored in Solution.verified.
         """
         phi_P, phi_Q = self.get_lhs(P, Q)
         sfps_P, sfps_Q = self.get_rhs(P, Q, reduce=reduce)
@@ -216,70 +226,18 @@ class IdentitySolver:
         self.debug(f'We have {len(a_vars)} a_i,j variables')
 
         equations = self.get_numeric_equations(phi_P, phi_Q, sfps_P, sfps_Q)
-        soln = self.solve_system(equations, a_vars)
-
-        # linsolve returns either EmptySet or a FiniteSet with one parametric solution
-        if not soln.args:
-            print('\n====================================\n')
-            print('No Solution')
+        values = self.solve_system(equations, len(a_vars))
+        if values is None:
             return None
-        values = dict(zip(a_vars, soln.args[0].args))
 
-        classes = self.classify_solution(values)
-        for var, value in classes['dependent']:
-            print(f'Depd: {var} = {value}')
-        for var, value in classes['fixed']:
-            print(f'Fixd: {var} = {value}')
-        for var, value in classes['free']:
-            print(f'Free: {var} = {value}')
-
-        print('\n====================================\n')
-        print(f'Num vars : {len(a_vars)}')
-        print(f'Dependent: {len(classes["dependent"])}')
-        print(f'Fixed    : {len(classes["fixed"])}')
-        print(f'Dimension: {len(classes["free"])}')
-        print(f'Forbidden: {len(classes["forbidden"])}')
-
-        print('\n====================================\n')
-        print(tuple(values.values()))
-
-        # Map each (P_k, Q_k) pattern pair to its coefficient a(i,j) in
-        # phi_P * phi_Q = sum of a(i,j) * phi_P_k * phi_Q_k
-        solution = {
-            pair: values[a_vars[reverse_variables[coords]]] for pair, coords in var_map.items()
+        coefficients = {
+            pair: values[reverse_variables[coords]] for pair, coords in var_map.items()
         }
-
+        solution = Solution(P, Q, coefficients)
         if verify:
-            if not self._verify(phi_P, phi_Q, sfps_P, sfps_Q, solution):
-                # Only possible if the random points were degenerate
-                print('\nSymbolic verification FAILED')
-                return None
-            print('\nVerified symbolically')
-
+            # Can only fail if the random points were degenerate
+            solution.verified = self._verify(phi_P, phi_Q, sfps_P, sfps_Q, solution)
         return solution
-
-    @staticmethod
-    def classify_solution(values):
-        """
-        Sorts the coefficients of a solution into exactly one of:
-            forbidden: always 0
-            free:      a parameter of the solution family
-            fixed:     a nonzero constant
-            dependent: determined by the free parameters
-        """
-        classes = {'forbidden': [], 'free': [], 'fixed': [], 'dependent': []}
-        for key, value in values.items():
-            value = sym.sympify(value)
-            if value == 0:
-                kind = 'forbidden'
-            elif value.is_Symbol:
-                kind = 'free'
-            elif not value.free_symbols:
-                kind = 'fixed'
-            else:
-                kind = 'dependent'
-            classes[kind].append((key, value))
-        return classes
 
     def debug(self, expr):
         if self.verbose:
