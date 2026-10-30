@@ -29,11 +29,7 @@ def test_forest_polys_match_brute_force(name, marked, num_trees):
     assert_forest_polys_match(GRAPHS[name], marked, num_trees)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason='patterns label parts by the lowest vertex of each component, which only '
-    'matches first-appearance order when the marked vertices are 0..m-1',
-)
-@pytest.mark.parametrize('name, marked', [('K5', [1, 2]), ('K5', [1, 3, 4])])
+@pytest.mark.parametrize('name, marked', [('K5', [1, 2]), ('K5', [1, 3, 4]), ('PRISM', [5, 0, 3])])
 def test_forest_polys_with_arbitrary_marked_vertices(name, marked):
-    assert_forest_polys_match(GRAPHS[name], marked, 2)
+    for k in range(1, len(marked) + 1):
+        assert_forest_polys_match(GRAPHS[name], marked, k)

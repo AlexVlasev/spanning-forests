@@ -81,15 +81,14 @@ class Solver:
         self.num_vertices = len(self.matrix)
         self.num_edges = int(sum((sum(row) for row in self.matrix)) / 2)
 
+        self.edges = []
         self.edge_vars = []
-        self.edge_vars_dict = dict()
 
         self.mat = None
         self.graph_poly = None
         self.tree_poly = None
 
         self.vertices = None
-        self.edge_visibilities = None
 
         self._initialize()
         self.debug_print = DEBUG
@@ -108,9 +107,8 @@ class Solver:
                 if self.matrix[i][j] == 0:
                     continue
 
-                symbol = f'e({i},{j})'
-                self.edge_vars.append(symbol)
-                self.edge_vars_dict[symbol] = len(self.edge_vars) - 1
+                self.edges.append((i, j))
+                self.edge_vars.append(f'e({i},{j})')
 
                 incidence[i][num_edges] = 1
                 incidence[j][num_edges] = -1
@@ -138,154 +136,58 @@ class Solver:
         nomial = Polynomial(self.edge_vars, {all_vars: 1})
         self.tree_poly = nomial * self.graph_poly.reciprocal()
 
-    def _get_vertices(self, edge):
-        indices = edge.strip('e()').split(',')
-        return list(map(int, indices))
-
     def set_vertices(self, vertices):
         self.vertices = vertices
-        self.edge_visibilities = dict()
-        for i, edge in enumerate(self.edge_vars):
-            indices = self._get_vertices(edge)
-            visible = []
-            for j in indices:
-                if j in self.vertices:
-                    visible.append(j)
-            self.edge_visibilities[edge] = visible
 
-    def _get_forest_polys(self, num_partitions):
-        forest_polys = []
-        for edges in itertools.combinations(self.edge_vars, num_partitions - 1):
-            poly = self.tree_poly
-            for edge in edges:
-                poly = poly.apply(edge, 1)
-            forest_polys.append(poly)
+    def _get_trees(self):
+        """Each spanning tree as the set of indices of its edges."""
+        return [
+            frozenset(i for i, p in enumerate(power) if p) for power in self.tree_poly.coefficients
+        ]
 
-        return forest_polys
+    def _get_pattern(self, forest):
+        """
+        Labels each marked vertex by the tree of the forest containing it,
+        numbering the trees in order of first appearance, e.g. '1213'.
+        """
+        parent = list(range(self.num_vertices))
 
-    def _get_partition_data(self, forest_polys):
-        partitions = []
-        forests = []
-        for p in forest_polys:
-            pieces = str(p).split(' + ')
-            for piece in pieces:
-                parts = []
-                monomial = piece.strip('01234567890')
-                variables = monomial.split('e')[1:]
-                indices = sorted(list(map(self._get_vertices, variables)))
-                components = [set([i]) for i in range(self.num_vertices)]
-                component_edges = [[] for i in range(self.num_vertices)]
+        def find(v):
+            while parent[v] != v:
+                v = parent[v]
+            return v
 
-                # print(indices)
-                # print(components)
-                # print(component_edges)
+        for e in forest:
+            i, j = self.edges[e]
+            parent[find(i)] = find(j)
 
-                for i, j in indices:
-                    hits = []
-                    for k, c in enumerate(components):
-                        if i in c:
-                            hits.append(k)
-                        if j in c:
-                            hits.append(k)
-                    hits = list(set(hits))
-                    if len(hits) == 1:
-                        k = hits[0]
-                        components[k].add(i)
-                        components[k].add(j)
-                        component_edges[k].append((i, j))
-                    if len(hits) == 2:
-                        a, b = min(hits), max(hits)
-                        # print((i, j), hits)
-                        c = components.pop(b)
-                        components[a] = components[a].union(c)
-                        ce = component_edges.pop(b)
-                        # print(ce)
-                        component_edges[a].extend(ce)
-                        component_edges[a].append((i, j))
-
-                # print(components)
-                # print(component_edges)
-                partitions.append(components)
-                component_edges = list(map(set, component_edges))
-                forests.append(component_edges)
-        return partitions, forests
-
-    def _compute_forest_patterns(self, partitions, forests, num_partitions):
-        part_patterns = dict()
-        forest_patterns = dict()
-        for p, forest in zip(partitions, forests):
-            pattern = [0 for v in self.vertices]
-            for i, v in enumerate(self.vertices):
-                for j, part in enumerate(p):
-                    if v in part:
-                        pattern[i] = j + 1
-            pattern = ''.join(map(str, pattern))
-            if len(set(pattern)) != num_partitions:
-                continue
-            # print(p, forest, pattern)
-            if pattern not in part_patterns:
-                part_patterns[pattern] = []
-            if pattern not in forest_patterns:
-                forest_patterns[pattern] = []
-            part_patterns[pattern].append(p)
-            forest_patterns[pattern].append(forest)
-
-        return part_patterns, forest_patterns
-
-    def _get_spanning_forests(self, forest_patterns):
-        spanning_forests = dict()
-        for p, forests in forest_patterns.items():
-            if p not in spanning_forests:
-                spanning_forests[p] = []
-            for forest in forests:
-                # print(p, forest)
-                coefficients = dict()
-                power = [0 for i in range(self.num_edges)]
-                for component in forest:
-                    if not component:
-                        continue
-                    for e in component:
-                        edge = f'e({e[0]},{e[1]})'
-                        index = self.edge_vars_dict[edge]
-                        power[index] = 1
-                coefficients[tuple(power)] = 1
-                poly = Polynomial(self.edge_vars, coefficients)
-                spanning_forests[p].append((forest, poly))
-        return spanning_forests
-
-    def _spanning_forest_polynomials(self, spanning_forests, num_partitions):
-        num_forest_edges = self.num_vertices - 1 - (num_partitions - 1)
-        spfs = dict()
-        for p in spanning_forests.keys():
-            datas = spanning_forests[p]
-            new_datas = []
-            for data in datas:
-                if data in new_datas:
-                    continue
-                new_datas.append(data)
-            datas = new_datas
-
-            poly = Polynomial(self.edge_vars, dict())
-            for f, monomial in datas:
-                coeffs = monomial.coefficients.copy()
-                for pattern, coeff in coeffs.items():
-                    if sum(pattern) < num_forest_edges:
-                        del monomial.coefficients[pattern]
-                poly += monomial
-            # poly.variables = self.replace_vars
-            # print(f'{p} : {poly}')
-            spfs[p] = poly
-        return spfs
+        labels = dict()
+        return ''.join(str(labels.setdefault(find(v), len(labels) + 1)) for v in self.vertices)
 
     def get_sfp_for(self, num_partitions):
-        forest_polys = self._get_forest_polys(num_partitions)
-        partitions, forests = self._get_partition_data(forest_polys)
-        part_patterns, forest_patterns = self._compute_forest_patterns(
-            partitions, forests, num_partitions
-        )
-        spanning_forests = self._get_spanning_forests(forest_patterns)
-        polynomials = self._spanning_forest_polynomials(spanning_forests, num_partitions)
-        return polynomials
+        """
+        Computes the spanning forest polynomial of every partition of the
+        marked vertices into num_partitions parts, keyed by pattern.
+
+        Every spanning forest with k trees is a spanning tree minus k - 1 of
+        its edges, so removing edges from the trees finds them all. A forest
+        whose marked vertices span fewer than k trees has a tree without any
+        marked vertex, so it belongs to no pattern.
+        """
+        forests = set()
+        for tree in self._get_trees():
+            for removed in itertools.combinations(tree, num_partitions - 1):
+                forests.add(tree.difference(removed))
+
+        coefficients = dict()
+        for forest in forests:
+            pattern = self._get_pattern(forest)
+            if len(set(pattern)) != num_partitions:
+                continue
+            power = tuple(1 if e in forest else 0 for e in range(self.num_edges))
+            coefficients.setdefault(pattern, dict())[power] = 1
+
+        return {p: Polynomial(self.edge_vars, coefficients[p]) for p in sorted(coefficients)}
 
     def get_phi_P(self, P):
         assert len(P) == len(self.vertices)
