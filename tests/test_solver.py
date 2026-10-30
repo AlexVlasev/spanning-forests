@@ -4,7 +4,7 @@ import pytest
 import sympy
 
 from helpers import GRAPHS, assert_identity, make_solver
-from main import Solver
+from identities import IdentitySolver
 
 CASES = [
     # name, marked, P, Q, reduce, expected dimension of the solution space
@@ -42,7 +42,7 @@ def test_solution_family_satisfies_identity(name, marked, P, Q, reduce, dimensio
 @pytest.mark.parametrize('name, marked, P, Q, reduce, dimension', CASES)
 def test_classification_covers_every_coefficient(name, marked, P, Q, reduce, dimension):
     _, solution = solve(name, marked, P, Q, reduce)
-    classes = Solver.classify_solution(solution)
+    classes = IdentitySolver.classify_solution(solution)
 
     assert sum(len(c) for c in classes.values()) == len(solution)
     assert len(classes['free']) == dimension
@@ -92,7 +92,7 @@ def test_solve_problem_with_verify():
 def test_classify_solution():
     x, y = sympy.symbols('x y')
     values = {'a': 0, 'b': x, 'c': 1, 'd': -2, 'e': 1 - x, 'f': 2 * y}
-    classes = Solver.classify_solution(values)
+    classes = IdentitySolver.classify_solution(values)
     assert {kind: [key for key, _ in entries] for kind, entries in classes.items()} == {
         'forbidden': ['a'],
         'free': ['b'],

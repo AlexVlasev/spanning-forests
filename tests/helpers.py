@@ -10,7 +10,8 @@ import math
 import random
 from itertools import combinations
 
-from main import Solver, get_kn
+from graph import Graph, complete_graph
+from identities import IdentitySolver
 
 
 def adjacency(num_vertices, edges):
@@ -21,8 +22,8 @@ def adjacency(num_vertices, edges):
     return matrix
 
 
-K4 = get_kn(4)
-K5 = get_kn(5)
+K4 = complete_graph(4)
+K5 = complete_graph(5)
 HOUSE = adjacency(5, [(0, 1), (0, 4), (1, 2), (1, 3), (1, 4), (2, 3), (3, 4)])
 PRISM = adjacency(
     6, [(0, 1), (1, 2), (0, 2), (3, 4), (4, 5), (3, 5), (0, 3), (1, 4), (2, 5)]
@@ -32,14 +33,11 @@ GRAPHS = {'K4': K4, 'K5': K5, 'HOUSE': HOUSE, 'PRISM': PRISM}
 
 
 def make_solver(matrix, marked):
-    solver = Solver(matrix)
-    solver.debug_print = False
-    solver.set_vertices(marked)
-    return solver
+    return IdentitySolver(Graph(matrix), marked)
 
 
 def edge_list(matrix):
-    """Edges in the same order as Solver.edge_vars."""
+    """Edges in the same order as Graph.edges."""
     n = len(matrix)
     return [(i, j) for i in range(n) for j in range(i + 1, n) if matrix[i][j]]
 
@@ -97,7 +95,7 @@ def monomials(poly):
 
 
 def evaluate(poly, point):
-    # Solver.get_phi_P returns a plain 0 when no forest has the given pattern
+    # Graph.forest_polynomial returns a plain 0 when no forest has the given pattern
     if poly == 0:
         return 0
     return sum(
@@ -105,10 +103,10 @@ def evaluate(poly, point):
     )
 
 
-def random_points(solver, seed, num_points=5):
+def random_points(graph, seed, num_points=5):
     rng = random.Random(seed)
     for _ in range(num_points):
-        yield [rng.randint(1, 100) for _ in solver.edge_vars]
+        yield [rng.randint(1, 100) for _ in graph.edges]
 
 
 def assert_identity(solver, lhs, rhs):
@@ -121,9 +119,10 @@ def assert_identity(solver, lhs, rhs):
     agreement at several random points makes a false positive vanishingly
     unlikely.
     """
+    graph = solver.graph
     patterns = {*lhs, *(p for pair in rhs for p in pair)}
-    polys = {p: solver.get_phi_P(p) for p in patterns}
-    for point in random_points(solver, seed=len(solver.edge_vars)):
+    polys = {p: graph.forest_polynomial(solver.marked, p) for p in patterns}
+    for point in random_points(graph, seed=graph.num_edges):
         value = {p: evaluate(poly, point) for p, poly in polys.items()}
         left = value[lhs[0]] * value[lhs[1]]
         right = sum(c * value[b] * value[a] for (b, a), c in rhs.items())

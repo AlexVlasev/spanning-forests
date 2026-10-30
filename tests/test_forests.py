@@ -1,6 +1,7 @@
 import pytest
 
-from helpers import GRAPHS, brute_force_forests, make_solver, monomials
+from graph import Graph
+from helpers import GRAPHS, brute_force_forests, monomials
 
 CASES = [
     ('K4', [0, 1, 2]),
@@ -13,10 +14,8 @@ CASES = [
 
 
 def assert_forest_polys_match(matrix, marked, num_trees):
-    solver = make_solver(matrix, marked)
-    actual = {
-        pattern: monomials(poly) for pattern, poly in solver.get_sfp_for(num_trees).items()
-    }
+    polys = Graph(matrix).forest_polynomials(marked, num_trees)
+    actual = {pattern: monomials(poly) for pattern, poly in polys.items()}
     expected = brute_force_forests(matrix, marked, num_trees)
     assert actual == expected
 
