@@ -359,59 +359,95 @@ def _chunk_equations_numpy(buckets, pairs):
     The equations of get_equations for the monomials in one chunk, from the
     buckets of _bucket_arrays, with dense rows.
     """
+    # Reduce each column to its distinct monomials before combining them, which
+    # keeps only one column's products in memory at a time
     keys, columns, coeffs = [], [], []
     for column, (buckets_a, buckets_b) in enumerate(buckets):
+        column_keys, column_coeffs = [], []
         for x, y in pairs:
             if x not in buckets_a or y not in buckets_b:
                 continue
             keys_a, coeffs_a = buckets_a[x]
             keys_b, coeffs_b = buckets_b[y]
-            keys.append(np.add.outer(keys_a, keys_b).ravel())
-            coeffs.append(np.multiply.outer(coeffs_a, coeffs_b).ravel())
-            columns.append(np.full(keys[-1].size, column, dtype=np.uint64))
+            column_keys.append(np.add.outer(keys_a, keys_b).ravel())
+            column_coeffs.append(np.multiply.outer(coeffs_a, coeffs_b).ravel())
+        if not column_keys:
+            continue
+        monomials, sums = _sum_by_key(np.concatenate(column_keys), np.concatenate(column_coeffs))
+        keys.append(monomials)
+        coeffs.append(sums)
+        columns.append(np.full(len(monomials), column, dtype=np.int64))
     if not keys:
         return set()
 
-    # Sum the coefficients of each (monomial, column) into a dense matrix with
-    # the constant in column 0, and the coefficient of a(i,j) number k in column k + 1
-    keys = np.concatenate(keys)
-    columns = np.concatenate(columns)
-    coeffs = np.concatenate(coeffs)
-    num_columns = len(buckets)
-    if np.all(coeffs == 1) and int(keys.max()) * num_columns < 2**64:
-        # Every coefficient is 1, so count the (monomial, column) pairs, packed
-        # into one integer, which only needs a sort rather than an argsort
-        pairs, counts = np.unique(keys * np.uint64(num_columns) + columns, return_counts=True)
-        monomials = pairs // np.uint64(num_columns)
-        starts = np.concatenate(([True], monomials[1:] != monomials[:-1]))
-        rows = np.zeros((int(starts.sum()), num_columns), dtype=np.int64)
-        rows[np.cumsum(starts) - 1, (pairs % np.uint64(num_columns)).astype(np.int64)] = counts
-    else:
-        monomials, inverse = np.unique(keys, return_inverse=True)
-        index = inverse.ravel() * num_columns + columns.astype(np.int64)
-        # Weights are summed as floats, which is exact for these small integers
-        rows = np.rint(np.bincount(index, weights=coeffs, minlength=len(monomials) * num_columns))
-        rows = rows.astype(np.int64).reshape(len(monomials), num_columns)
+    # Sparse rows, as runs of (column, coefficient) entries grouped by monomial,
+    # with the constant in column 0, and the coefficient of a(i,j) number k in
+    # column k + 1. Columns were added in order, so a stable sort keeps them sorted
+    _, inverse = np.unique(np.concatenate(keys), return_inverse=True)
+    order = np.argsort(inverse.ravel(), kind='stable')
+    monomials = inverse.ravel()[order]
+    columns = np.concatenate(columns)[order]
+    coeffs = np.concatenate(coeffs)[order]
 
-    gcd = np.gcd.reduce(rows, axis=1)
-    rows = rows[gcd > 0] // gcd[gcd > 0, None]
-    return {(tuple(int(c) for c in row[1:]), int(row[0])) for row in _unique_rows(rows)}
+    nonzero = coeffs != 0
+    monomials, columns, coeffs = monomials[nonzero], columns[nonzero], coeffs[nonzero]
+    if not len(coeffs):
+        return set()
+    starts = np.flatnonzero(np.concatenate(([True], monomials[1:] != monomials[:-1])))
+    lengths = np.diff(np.append(starts, len(coeffs)))
+    coeffs = coeffs // np.repeat(np.gcd.reduceat(np.abs(coeffs), starts), lengths)
+
+    num_vars = len(buckets) - 1
+    equations = set()
+    for start, length in _unique_runs(starts, lengths, columns, coeffs):
+        row = [0] * num_vars
+        constant = 0
+        for column, c in zip(columns[start : start + length], coeffs[start : start + length]):
+            if column == 0:
+                constant = int(c)
+            else:
+                row[column - 1] = int(c)
+        equations.add((tuple(row), constant))
+    return equations
 
 
-def _unique_rows(rows):
+def _unique_runs(starts, lengths, columns, coeffs):
     """
-    The distinct rows of a matrix. Equivalent to np.unique(rows, axis=0), but
-    much faster for many rows: rows are grouped by a hash, and kept as is
-    after checking that every row equals the first of its group.
+    The (start, length) of one representative of each distinct run of
+    (column, coefficient) entries. Runs are grouped by a hash, and kept as is
+    after checking that every run equals the representative of its group.
+    Otherwise, the runs are compared exactly instead.
     """
     rng = np.random.default_rng(0)
-    weights = rng.integers(1, 2**62, size=rows.shape[1], dtype=np.int64)
+    weights = rng.integers(1, 2**62, size=int(columns.max()) + 1, dtype=np.int64)
     with np.errstate(over='ignore'):
-        hashes = rows @ weights
+        hashes = np.add.reduceat(coeffs * weights[columns], starts)
     _, first, inverse = np.unique(hashes, return_index=True, return_inverse=True)
-    if np.array_equal(rows, rows[first[inverse.ravel()]]):
-        return rows[first]
-    return np.unique(rows, axis=0)
+    representative = first[inverse.ravel()]
+
+    if np.array_equal(lengths, lengths[representative]):
+        # Compare every entry with the entry at the same offset in the representative run
+        offsets = np.arange(len(coeffs)) - np.repeat(starts, lengths)
+        matching = np.repeat(starts[representative], lengths) + offsets
+        if np.array_equal(columns, columns[matching]) and np.array_equal(coeffs, coeffs[matching]):
+            return zip(starts[first], lengths[first])
+
+    runs = dict()
+    for start, length in zip(starts, lengths):
+        run = (tuple(columns[start : start + length]), tuple(coeffs[start : start + length]))
+        runs.setdefault(run, (start, length))
+    return runs.values()
+
+
+def _sum_by_key(keys, coeffs):
+    """The distinct keys, sorted, and the sum of the coefficients of each."""
+    if np.all(coeffs == 1):
+        # Only needs a sort rather than an argsort
+        return np.unique(keys, return_counts=True)
+    distinct, inverse = np.unique(keys, return_inverse=True)
+    # Weights are summed as floats, which is exact for these small integers
+    sums = np.rint(np.bincount(inverse.ravel(), weights=coeffs)).astype(np.int64)
+    return distinct, sums
 
 
 def _masks(poly):

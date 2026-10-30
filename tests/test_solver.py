@@ -1,10 +1,11 @@
 import random
 
+import numpy as np
 import pytest
 import sympy
 
 from helpers import GRAPHS, adjacency, assert_identity, make_solver
-from identities import IdentitySolver, _crt, _evaluate_all, _evaluate_all_numpy
+from identities import IdentitySolver, _crt, _evaluate_all, _evaluate_all_numpy, _unique_runs
 from polynomial import Polynomial
 
 CASES = [
@@ -89,6 +90,33 @@ def test_numpy_evaluation_with_negative_and_large_coefficients():
     points = [[1, 2, 3], [1000, 999, 998], [5, 1, 1000]]
     assert _evaluate_all_numpy(poly, points) == _evaluate_all(poly, points)
     assert _evaluate_all_numpy(Polynomial(variables, {}), points) == [0, 0, 0]
+
+
+def runs_of(columns, coeffs, runs):
+    return {(tuple(columns[s : s + n]), tuple(coeffs[s : s + n])) for s, n in runs}
+
+
+def test_unique_runs(monkeypatch):
+    # Runs: [(0, 1), (2, 3)], [(1, 5)], [(0, 1), (2, 3)], [(0, 1), (2, 4)], [(1, 5)]
+    columns = np.array([0, 2, 1, 0, 2, 0, 2, 1])
+    coeffs = np.array([1, 3, 5, 1, 3, 1, 4, 5])
+    starts = np.array([0, 2, 3, 5, 7])
+    lengths = np.array([2, 1, 2, 2, 1])
+    expected = {((0, 2), (1, 3)), ((1,), (5,)), ((0, 2), (1, 4))}
+
+    runs = list(_unique_runs(starts, lengths, columns, coeffs))
+    assert len(runs) == 3
+    assert runs_of(columns, coeffs, runs) == expected
+
+    # With every hash colliding, the exact comparison takes over
+    class ZeroWeights:
+        def integers(self, low, high, size, dtype):
+            return np.zeros(size, dtype=dtype)
+
+    monkeypatch.setattr(np.random, 'default_rng', lambda seed: ZeroWeights())
+    runs = list(_unique_runs(starts, lengths, columns, coeffs))
+    assert len(runs) == 3
+    assert runs_of(columns, coeffs, runs) == expected
 
 
 def test_crt():
