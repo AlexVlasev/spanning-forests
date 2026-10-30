@@ -88,15 +88,20 @@ def brute_force_forests(matrix, marked, num_trees):
     return result
 
 
+def edges_of(mask, num_edges):
+    return frozenset(e for e in range(num_edges) if (mask >> e) & 1)
+
+
 def monomials(poly):
-    """The edge index sets of a polynomial whose coefficients are all 1."""
-    assert all(c == 1 for c in poly.coefficients.values()), poly.coefficients
-    return {frozenset(i for i, p in enumerate(power) if p) for power in poly.coefficients}
+    """The edge index sets of a MultilinearPolynomial whose coefficients are all 1."""
+    assert all(c == 1 for c in poly.terms.values()), poly.terms
+    return {edges_of(mask, len(poly.variables)) for mask in poly.terms}
 
 
 def evaluate(poly, point):
     return sum(
-        c * math.prod(x**k for x, k in zip(point, power)) for power, c in poly.coefficients.items()
+        c * math.prod(point[e] for e in edges_of(mask, len(poly.variables)))
+        for mask, c in poly.terms.items()
     )
 
 

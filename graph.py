@@ -11,7 +11,7 @@ import itertools
 
 import numpy as np
 
-from polynomial import Polynomial
+from polynomial import MultilinearPolynomial
 
 
 def complete_graph(n):
@@ -39,17 +39,13 @@ class Graph:
         # The tree polynomial has the edges in each tree, and the graph
         # polynomial psi_G the edges not in each tree
         all_edges = (1 << self.num_edges) - 1
-        tree_coefficients = {self._power(tree): 1 for tree in self.trees}
-        graph_coefficients = {self._power(all_edges ^ tree): 1 for tree in self.trees}
-        self.tree_poly = Polynomial(self.edge_vars, tree_coefficients)
-        self.graph_poly = Polynomial(self.edge_vars, graph_coefficients)
+        self.tree_poly = MultilinearPolynomial(self.edge_vars, {tree: 1 for tree in self.trees})
+        self.graph_poly = MultilinearPolynomial(
+            self.edge_vars, {all_edges ^ tree: 1 for tree in self.trees}
+        )
 
         # Forest polynomials by (marked vertices, number of parts)
         self._forest_polynomials = dict()
-
-    def _power(self, mask):
-        """The exponent tuple of the monomial with the edges in a bitmask."""
-        return tuple(map(int, reversed(f'{mask:0{self.num_edges}b}')))
 
     def _is_connected(self, excluded):
         """Whether the edges not in excluded connect every vertex."""
@@ -144,14 +140,14 @@ class Graph:
         else:
             forests = self._forests(num_parts)
 
-        coefficients = dict()
+        terms = dict()
         for forest in forests:
             pattern = self.pattern(forest, marked)
             if len(set(pattern)) != num_parts:
                 continue
-            coefficients.setdefault(pattern, dict())[self._power(forest)] = 1
+            terms.setdefault(pattern, dict())[forest] = 1
 
-        return {p: Polynomial(self.edge_vars, coefficients[p]) for p in sorted(coefficients)}
+        return {p: MultilinearPolynomial(self.edge_vars, terms[p]) for p in sorted(terms)}
 
     def _forests(self, num_parts):
         """The distinct bitmasks of every spanning tree minus num_parts - 1 of its edges."""
@@ -187,7 +183,7 @@ class Graph:
         if set(pattern) == {'1'}:
             return self.tree_poly
         polys = self.forest_polynomials(marked, len(set(pattern)))
-        return polys.get(pattern, Polynomial(self.edge_vars, dict()))
+        return polys.get(pattern, MultilinearPolynomial(self.edge_vars, dict()))
 
 
 def _bits(mask):

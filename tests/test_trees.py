@@ -8,8 +8,8 @@ from helpers import GRAPHS, adjacency, edge_list, monomials, spanning_forests
 @pytest.mark.parametrize('n', [3, 4, 5, 6])
 def test_cayley_formula(n):
     graph = Graph(complete_graph(n))
-    assert len(graph.tree_poly.coefficients) == n ** (n - 2)
-    assert set(graph.tree_poly.coefficients.values()) == {1}
+    assert len(graph.tree_poly) == n ** (n - 2)
+    assert set(graph.tree_poly.terms.values()) == {1}
 
 
 @pytest.mark.parametrize('name', GRAPHS)
@@ -47,10 +47,10 @@ def matrix_tree_graph_poly(matrix):
 @pytest.mark.parametrize('name', ['K4', 'HOUSE'])
 def test_graph_poly_matches_matrix_tree_theorem(name):
     graph = Graph(GRAPHS[name])
-    assert graph.graph_poly.coefficients == matrix_tree_graph_poly(GRAPHS[name])
+    assert graph.graph_poly.to_polynomial().coefficients == matrix_tree_graph_poly(GRAPHS[name])
 
 
 def test_disconnected_graph_has_no_trees():
     graph = Graph(adjacency(4, [(0, 1), (2, 3)]))
     assert graph.trees == []
-    assert graph.tree_poly.coefficients == {}
+    assert len(graph.tree_poly) == 0

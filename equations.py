@@ -39,11 +39,12 @@ def exact_equations(problem, num_edges, chunk_edges=8, use_numpy=True):
     chunk_mask = (1 << min(chunk_edges, num_edges)) - 1
     use_numpy = use_numpy and num_edges <= MAX_NUMPY_EDGES
 
-    # Factor 0 is the left hand side, and factor k + 1 multiplies unknown number k
-    masks_P = [_masks(poly) for poly in problem.rhs_P.values()]
-    masks_Q = [_masks(poly) for poly in problem.rhs_Q.values()]
-    factors = [(_masks(problem.phi_P), _masks(problem.phi_Q))]
-    factors.extend(itertools.product(masks_P, masks_Q))
+    # Factor 0 is the left hand side, and factor k + 1 multiplies unknown number k,
+    # with the terms of each polynomial as (bitmask of edges, coefficient) pairs
+    terms_P = [list(poly.terms.items()) for poly in problem.rhs_P.values()]
+    terms_Q = [list(poly.terms.items()) for poly in problem.rhs_Q.values()]
+    factors = [(list(problem.phi_P.terms.items()), list(problem.phi_Q.terms.items()))]
+    factors.extend(itertools.product(terms_P, terms_Q))
     if use_numpy:
         bucket = lambda terms: _bucket_arrays(terms, num_edges, chunk_mask)
     else:
@@ -104,7 +105,7 @@ def _dense(sparse_equations, num_vars):
 
 
 def _bucket(terms, mask):
-    """Sorts terms from _masks by which of the edges in mask they contain."""
+    """Sorts (bitmask, coefficient) terms by which of the edges in mask they contain."""
     buckets = dict()
     for term in terms:
         buckets.setdefault(term[0] & mask, []).append(term)
@@ -228,21 +229,10 @@ def _sum_by_key(keys, coeffs):
     return distinct, sums
 
 
-def _masks(poly):
-    """
-    The terms of a polynomial without squares, such as a spanning forest
-    polynomial, as (bitmask of edges, coefficient) pairs.
-    """
-    terms = []
-    for power, c in poly.coefficients.items():
-        assert all(k <= 1 for k in power), 'Expected a polynomial without squares'
-        terms.append((sum(1 << e for e, k in enumerate(power) if k), c))
-    return terms
-
-
 def _multiply_into(product, terms_a, terms_b):
     """
-    Adds the product of two polynomials given by _masks into product.
+    Adds the product of two polynomials, given as (bitmask of edges,
+    coefficient) pairs, into product.
     Each monomial of the product is identified by the pair
     (a | b, a & b): its edges, and which of those are squared.
     """

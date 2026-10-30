@@ -190,6 +190,52 @@ class Polynomial:
         return Polynomial(self.variables, coefficients)
 
 
+class MultilinearPolynomial:
+    """
+    A polynomial in which no variable appears squared, such as a spanning
+    forest polynomial, with terms mapping the bitmask of the variables in
+    each monomial (bit e for variable e) to its coefficient.
+    """
+
+    def __init__(self, variables, terms):
+        self.variables = variables
+        self.terms = dict(terms)
+
+    def __len__(self):
+        return len(self.terms)
+
+    def __eq__(self, other):
+        if not isinstance(other, MultilinearPolynomial):
+            return NotImplemented
+        return self.variables == other.variables and self.terms == other.terms
+
+    def __mul__(self, scalar):
+        return MultilinearPolynomial(self.variables, {m: c * scalar for m, c in self.terms.items()})
+
+    __rmul__ = __mul__
+
+    def to_polynomial(self):
+        """The same polynomial as a Polynomial, with exponent tuples."""
+        coefficients = dict()
+        for mask, c in self.terms.items():
+            power = tuple((mask >> e) & 1 for e in range(len(self.variables)))
+            coefficients[power] = c
+        return Polynomial(self.variables, coefficients)
+
+    def __repr__(self):
+        return str(self.to_polynomial())
+
+
+def edge_indices(mask):
+    """The indices of the set bits of a bitmask, from the lowest."""
+    indices = []
+    while mask:
+        low = mask & -mask
+        indices.append(low.bit_length() - 1)
+        mask ^= low
+    return tuple(indices)
+
+
 if __name__ == '__main__':
     # variables = ['x', 'y']
     # P = Polynomial(variables, {(1, 0): 2, (0, 1): 3, (1, 1): 1})

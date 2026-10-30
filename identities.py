@@ -56,10 +56,7 @@ class IdentitySolver:
     def _problem(self, P, Q, parts_P, parts_Q):
         phi_P = self.graph.forest_polynomial(self.marked, P)
         phi_Q = self.graph.forest_polynomial(self.marked, Q)
-        self.debug(
-            f'Polynomials {P} and {Q} have {len(phi_P.coefficients)} and '
-            f'{len(phi_Q.coefficients)} terms'
-        )
+        self.debug(f'Polynomials {P} and {Q} have {len(phi_P)} and {len(phi_Q)} terms')
 
         rhs_P = self.graph.forest_polynomials(self.marked, parts_P)
         rhs_Q = self.graph.forest_polynomials(self.marked, parts_Q)

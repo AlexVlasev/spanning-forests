@@ -13,6 +13,8 @@ import random
 import numpy as np
 import sympy as sym
 
+from polynomial import edge_indices
+
 # Random points have coordinates from 1 to MAX_POINT
 MAX_POINT = 1000
 
@@ -58,11 +60,8 @@ def numeric_equations(problem, num_edges, extra_points=10, seed=0, use_numpy=Tru
 
 
 def _terms(poly):
-    """The terms of a polynomial as (coefficient, edge indices) pairs, for fast evaluation."""
-    return [
-        (c, tuple(e for e, k in enumerate(power) for _ in range(k)))
-        for power, c in poly.coefficients.items()
-    ]
+    """The terms of a MultilinearPolynomial as (coefficient, edge indices) pairs."""
+    return [(c, edge_indices(mask)) for mask, c in poly.terms.items()]
 
 
 def _evaluate(terms, point):

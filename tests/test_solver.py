@@ -7,7 +7,7 @@ import sympy
 from equations import _unique_runs
 from evaluation import crt, evaluate_all, evaluate_all_numpy
 from helpers import GRAPHS, adjacency, assert_identity, make_solver
-from polynomial import Polynomial
+from polynomial import MultilinearPolynomial
 from solution import Solution, classify
 
 CASES = [
@@ -84,11 +84,13 @@ def test_numpy_evaluation_gives_the_same_numeric_equations(name, marked, P, Q, r
 
 def test_numpy_evaluation_with_negative_and_large_coefficients():
     variables = ['x', 'y', 'z']
-    coefficients = {(1, 1, 0): -3, (0, 2, 1): 10**30, (0, 0, 0): -(10**25), (1, 0, 0): 7}
-    poly = Polynomial(variables, coefficients)
+    # The terms -3xy + 10**30 yz - 10**25 + 7x + xyz
+    terms = {0b011: -3, 0b110: 10**30, 0b000: -(10**25), 0b001: 7, 0b111: 1}
+    poly = MultilinearPolynomial(variables, terms)
     points = [[1, 2, 3], [1000, 999, 998], [5, 1, 1000]]
     assert evaluate_all_numpy(poly, points) == evaluate_all(poly, points)
-    assert evaluate_all_numpy(Polynomial(variables, {}), points) == [0, 0, 0]
+    assert evaluate_all(poly, points)[0] == -3 * 2 + 10**30 * 6 - 10**25 + 7 + 6
+    assert evaluate_all_numpy(MultilinearPolynomial(variables, {}), points) == [0, 0, 0]
 
 
 def runs_of(columns, coeffs, runs):

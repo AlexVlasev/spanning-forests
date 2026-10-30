@@ -105,5 +105,5 @@ For comparison, the original version took about 8 s on the $K_6$ search and 40 s
 - `equations.py`: the exact linear system from expanding every product, in chunks, with NumPy or pure Python.
 - `solution.py`: the `Solution` class for a family of identities, with its report.
 - `main.py`: the command line interface.
-- `polynomial.py`: a small multivariate polynomial class.
+- `polynomial.py`: `MultilinearPolynomial`, which stores each monomial as a bitmask of its edges and is used for all spanning forest polynomials, and a general `Polynomial` class for display.
 - `tests/`: checks against brute-force forest enumeration, known identities, and the matrix-tree theorem.
