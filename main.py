@@ -82,7 +82,7 @@ class Solver:
         self.edges = []
         self.edge_vars = []
 
-        self.mat = None
+        self.trees = []
         self.graph_poly = None
         self.tree_poly = None
 
@@ -93,55 +93,81 @@ class Solver:
 
     def _initialize(self):
         """
-        Computes the graph polynomial and its reciprocal tree polynomial
-        by first computing an incidence matrix and then using the matrix
-        tree theorem.
+        Enumerates the spanning trees and builds from them the tree polynomial
+        (edges in each tree) and the graph polynomial (edges not in each tree).
         """
-        incidence = [[0 for i in range(self.num_edges)] for j in range(self.num_vertices)]
-
-        num_edges = 0
         for i in range(self.num_vertices):
             for j in range(i + 1, self.num_vertices):
                 if self.matrix[i][j] == 0:
                     continue
-
                 self.edges.append((i, j))
                 self.edge_vars.append(f'e({i},{j})')
-
-                incidence[i][num_edges] = 1
-                incidence[j][num_edges] = -1
-                num_edges += 1
 
         if self.display_vars is None:
             self.display_vars = self.edge_vars
 
-        incidence.pop(-1)
-        incidence_T = Matrix(incidence).transpose().array
+        self.trees = self._enumerate_trees()
 
-        # Getting the Laplacian incidence matrix
-        diag = [[0 for i in range(num_edges)] for j in range(num_edges)]
-        for i, edge in enumerate(self.edge_vars):
-            power = tuple((1 if j == i else 0 for j in range(num_edges)))
-            diag[i][i] = Polynomial(self.edge_vars, {power: 1})
-        self.mat = Matrix.expand_block(diag, incidence_T, (-Matrix(incidence)).array)
+        tree_coefficients = dict()
+        graph_coefficients = dict()
+        for tree in self.trees:
+            tree_coefficients[tuple(1 if e in tree else 0 for e in range(self.num_edges))] = 1
+            graph_coefficients[tuple(0 if e in tree else 1 for e in range(self.num_edges))] = 1
+        self.tree_poly = Polynomial(self.edge_vars, tree_coefficients)
+        self.graph_poly = Polynomial(self.edge_vars, graph_coefficients)
 
-        # Matrix tree theorem
-        self.graph_poly = self.mat.det()
-        self.graph_poly = Polynomial(self.edge_vars, self.graph_poly.coefficients)
+    def _is_connected(self, excluded):
+        """Whether the edges not in excluded connect every vertex."""
+        neighbours = [[] for _ in range(self.num_vertices)]
+        for e, (i, j) in enumerate(self.edges):
+            if e not in excluded:
+                neighbours[i].append(j)
+                neighbours[j].append(i)
 
-        # The reciprocal polynomial which has all the edges from the trees (not the complement)
-        all_vars = tuple([1 for _ in range(self.num_edges)])
-        nomial = Polynomial(self.edge_vars, {all_vars: 1})
-        self.tree_poly = nomial * self.graph_poly.reciprocal()
+        seen = {0}
+        stack = [0]
+        while stack:
+            for w in neighbours[stack.pop()]:
+                if w not in seen:
+                    seen.add(w)
+                    stack.append(w)
+        return len(seen) == self.num_vertices
+
+    def _enumerate_trees(self):
+        """
+        Lists every spanning tree as the set of indices of its edges.
+
+        Walks the edges in order, deciding for each whether the tree contains
+        it. An edge is only included if it joins two different trees of the
+        forest chosen so far, and only excluded if the remaining edges still
+        connect the graph, so every branch of the search ends in a spanning
+        tree.
+        """
+        trees = []
+        excluded = set()
+
+        def search(e, chosen, components):
+            if len(chosen) == self.num_vertices - 1:
+                trees.append(frozenset(chosen))
+                return
+
+            i, j = self.edges[e]
+            ci, cj = components[i], components[j]
+            if ci != cj:
+                merged = [ci if c == cj else c for c in components]
+                search(e + 1, [*chosen, e], merged)
+
+            excluded.add(e)
+            if self._is_connected(excluded):
+                search(e + 1, chosen, components)
+            excluded.remove(e)
+
+        if self._is_connected(excluded):
+            search(0, [], list(range(self.num_vertices)))
+        return trees
 
     def set_vertices(self, vertices):
         self.vertices = vertices
-
-    def _get_trees(self):
-        """Each spanning tree as the set of indices of its edges."""
-        return [
-            frozenset(i for i, p in enumerate(power) if p) for power in self.tree_poly.coefficients
-        ]
 
     def _get_pattern(self, forest):
         """
@@ -173,7 +199,7 @@ class Solver:
         marked vertex, so it belongs to no pattern.
         """
         forests = set()
-        for tree in self._get_trees():
+        for tree in self.trees:
             for removed in itertools.combinations(tree, num_partitions - 1):
                 forests.add(tree.difference(removed))
 
