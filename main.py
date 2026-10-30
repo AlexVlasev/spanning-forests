@@ -269,22 +269,63 @@ class Solver:
         get_abstract_vars, reduced by their gcd. Duplicates are dropped.
         """
         self.debug(f'\nMultiplying P, Q polynomial pairs: {len(sfps_P) * len(sfps_Q) + 1}')
-        lhs = (phi_P * phi_Q).coefficients
-        products = [(p_poly * q_poly).coefficients for _, p_poly in sfps_P for _, q_poly in sfps_Q]
+        lhs = self._multiply(self._masks(phi_P), self._masks(phi_Q))
+        masks_P = [self._masks(poly) for _, poly in sfps_P]
+        masks_Q = [self._masks(poly) for _, poly in sfps_Q]
 
-        monomials = set(lhs).union(*products)
-        self.debug(f'Removing duplicate equations from {len(monomials)} equations')
-        equations = set()
-        for monomial in monomials:
-            row = tuple(product.get(monomial, 0) for product in products)
+        # The sparse row of each monomial: (index of a(i,j), coefficient) pairs
+        rows = {monomial: [] for monomial in lhs}
+        for k, (terms_P, terms_Q) in enumerate(itertools.product(masks_P, masks_Q)):
+            for monomial, c in self._multiply(terms_P, terms_Q).items():
+                rows.setdefault(monomial, []).append((k, c))
+
+        self.debug(f'Removing duplicate equations from {len(rows)} equations')
+        sparse_equations = set()
+        for monomial, entries in rows.items():
             constant = lhs.get(monomial, 0)
-            gcd = math.gcd(*row, constant)
+            gcd = math.gcd(*(c for _, c in entries), constant)
             if gcd == 0:
                 continue
-            equations.add((tuple(c // gcd for c in row), constant // gcd))
+            sparse_equations.add((tuple((k, c // gcd) for k, c in entries), constant // gcd))
+
+        num_vars = len(masks_P) * len(masks_Q)
+        equations = set()
+        for entries, constant in sparse_equations:
+            row = [0] * num_vars
+            for k, c in entries:
+                row[k] = c
+            equations.add((tuple(row), constant))
 
         self.debug(f'Remaining equations: {len(equations)}')
         return equations
+
+    @staticmethod
+    def _masks(poly):
+        """
+        The terms of a polynomial without squares, such as a spanning forest
+        polynomial, as (bitmask of edges, coefficient) pairs.
+        """
+        if not isinstance(poly, Polynomial):
+            return []
+        terms = []
+        for power, c in poly.coefficients.items():
+            assert all(k <= 1 for k in power), 'Expected a polynomial without squares'
+            terms.append((sum(1 << e for e, k in enumerate(power) if k), c))
+        return terms
+
+    @staticmethod
+    def _multiply(terms_a, terms_b):
+        """
+        Multiplies two polynomials given by _masks. Each monomial of the
+        product is identified by the pair (a | b, a & b): its edges, and
+        which of those are squared.
+        """
+        product = dict()
+        for a, c in terms_a:
+            for b, d in terms_b:
+                key = (a | b, a & b)
+                product[key] = product.get(key, 0) + c * d
+        return product
 
     @staticmethod
     def _terms(poly):
