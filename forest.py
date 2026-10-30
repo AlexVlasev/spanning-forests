@@ -1,2 +1,0 @@
-from polynomial import Polynomial
-

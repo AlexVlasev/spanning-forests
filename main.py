@@ -18,43 +18,14 @@ DEBUG = True
 6. Collect monomials by partition and add them to form the phi_G polynomials
 """
 
-# 1. Define a graph, whether random or like K_n
-
-K3 = [
-    [0, 1, 1],
-    [1, 0, 1],
-    [1, 1, 0],
-]
-
-
 def get_kn(n):
     kn = [[0 if i == j else 1 for j in range(n)] for i in range(n)]
     return kn
 
 
-MATRIX = get_kn(5)
-
-VER_5 = [0, 1, 2]
-VERT = [0, 1, 2, 3]
-
-VERTICES = VERT
-
-num_vertices = len(MATRIX)
-# print(MATRIX)
-num_edges = int(sum((sum(row) for row in MATRIX)) / 2)
-
-VAR_EMPTY = []
-VAR_ABC = ['b', 'a', 'g', 'e', 'd', 'f', 'c']
-alphabet = 'abcdefghijklmnoqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
-VAR_ABC_N = [alphabet[i] for i in range(num_edges)]
-
-REPLACE_VARS = VAR_ABC_N
-
-
 class Solver:
-    def __init__(self, matrix, display_vars=None):
+    def __init__(self, matrix):
         self.matrix = matrix
-        self.display_vars = display_vars
         self.num_vertices = len(self.matrix)
         self.num_edges = int(sum((sum(row) for row in self.matrix)) / 2)
 
@@ -81,9 +52,6 @@ class Solver:
                     continue
                 self.edges.append((i, j))
                 self.edge_vars.append(f'e({i},{j})')
-
-        if self.display_vars is None:
-            self.display_vars = self.edge_vars
 
         self.trees = self._enumerate_trees()
 
@@ -201,21 +169,14 @@ class Solver:
         sfps = self.get_sfp_for(length)
         return sfps.get(P, 0)
 
-    def print_poly(self, poly: Polynomial):
-        poly.variables = self.display_vars
-        print(f'Poly: {poly}')
-        poly.variables = self.edge_vars
-
     def get_lhs(self, P, Q):
         self.debug(f'Getting {P} polynomial')
         phi_P = self.get_phi_P(P)
         self.debug(f'Polynomial {P} has {len(phi_P.coefficients.items())} terms')
-        # self.print_poly(phi_P)
 
         self.debug(f'Getting {Q} polynomial')
         phi_Q = self.get_phi_P(Q)
         self.debug(f'Polynomial {Q} has {len(phi_Q.coefficients.items())} terms')
-        # self.print_poly(phi_Q)
 
         return phi_P, phi_Q
 
@@ -528,35 +489,35 @@ if __name__ == '__main__':
 
     # n = 5
     # vertices = [k for k in range(n-1)]
-    # solver = Solver(get_kn(n), display_vars=None)
+    # solver = Solver(get_kn(n))
     # solver.set_vertices(vertices)
     # P = '1' * (n-1)
     # Q = ''.join(map(lambda x: str(x+1), vertices))
     # solver.solve_problem(P, Q)
 
     # vertices = [0, 1, 2, 3, 4]
-    # solver = Solver(get_kn(6), display_vars=None)
+    # solver = Solver(get_kn(6))
     # solver.set_vertices(vertices)
     # P = '11111'
     # Q = '12345'
     # solver.solve_problem(P, Q, reduce=True)
 
     # vertices = [0, 1, 2]
-    # solver = Solver(get_kn(5), display_vars=None)
+    # solver = Solver(get_kn(5))
     # solver.set_vertices(vertices)
     # P = '111'
     # Q = '123'
     # solver.solve_problem(P, Q, reduce=True)
 
     # vertices = [0, 1, 2, 3, 4]
-    # solver = Solver(get_kn(6), display_vars=None)
+    # solver = Solver(get_kn(6))
     # solver.set_vertices(vertices)
     # P = '11122'
     # Q = '12345'
     # solver.solve_problem(P, Q, reduce=False)
 
     vertices = [0, 1, 2, 3]
-    solver = Solver(get_kn(5), display_vars=None)
+    solver = Solver(get_kn(5))
     solver.set_vertices(vertices)
     P = '1111'
     Q = '1234'
