@@ -3,7 +3,7 @@ import random
 import pytest
 import sympy
 
-from helpers import GRAPHS, assert_identity, make_solver
+from helpers import GRAPHS, adjacency, assert_identity, make_solver
 from identities import IdentitySolver
 
 CASES = [
@@ -63,14 +63,30 @@ def test_numeric_and_symbolic_systems_agree(name, marked, P, Q, reduce, dimensio
 @pytest.mark.parametrize(
     'name, marked, P, Q', [('K5', [0, 1, 2], '111', '123'), ('PRISM', [0, 1, 2, 3], '1111', '1234')]
 )
-def test_chunking_does_not_change_equations(name, marked, P, Q):
+def test_chunking_and_numpy_do_not_change_equations(name, marked, P, Q):
     solver = make_solver(GRAPHS[name], marked)
-    phi_P, phi_Q = solver.get_lhs(P, Q)
-    sfps_P, sfps_Q = solver.get_rhs(P, Q, reduce=True)
+    polys = (*solver.get_lhs(P, Q), *solver.get_rhs(P, Q, reduce=True))
 
-    unchunked = solver.get_equations(phi_P, phi_Q, sfps_P, sfps_Q, chunk_edges=0)
-    for chunk_edges in (2, 6):
-        assert solver.get_equations(phi_P, phi_Q, sfps_P, sfps_Q, chunk_edges) == unchunked
+    expected = solver.get_equations(*polys, chunk_edges=0, use_numpy=False)
+    for use_numpy in (False, True):
+        for chunk_edges in (0, 2, 6, 8):
+            assert solver.get_equations(*polys, chunk_edges, use_numpy) == expected
+
+
+def test_numpy_equations_with_coefficients_other_than_one():
+    solver = make_solver(GRAPHS['K5'], [0, 1, 2])
+    phi_P, phi_Q, sfps_P, sfps_Q = (*solver.get_lhs('111', '123'), *solver.get_rhs('111', '123'))
+    polys = (phi_P * 2, phi_Q, sfps_P, sfps_Q)
+    expected = solver.get_equations(*polys, use_numpy=False)
+    assert solver.get_equations(*polys, use_numpy=True) == expected
+
+
+def test_numpy_equations_with_empty_polynomials():
+    # In a disconnected graph phi_P is 0, so the identity has no solution
+    solver = make_solver(adjacency(5, [(0, 1), (1, 2), (3, 4)]), [0, 1, 2])
+    polys = (*solver.get_lhs('111', '123'), *solver.get_rhs('111', '123', reduce=True))
+    expected = solver.get_equations(*polys, use_numpy=False)
+    assert solver.get_equations(*polys, use_numpy=True) == expected
 
 
 @pytest.mark.parametrize('name, marked, P, Q, reduce, dimension', CASES)

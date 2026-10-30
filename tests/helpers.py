@@ -95,9 +95,6 @@ def monomials(poly):
 
 
 def evaluate(poly, point):
-    # Graph.forest_polynomial returns a plain 0 when no forest has the given pattern
-    if poly == 0:
-        return 0
     return sum(
         c * math.prod(x**k for x, k in zip(point, power)) for power, c in poly.coefficients.items()
     )

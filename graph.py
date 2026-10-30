@@ -141,9 +141,10 @@ class Graph:
     def forest_polynomial(self, marked, pattern):
         """
         The spanning forest polynomial of a single partition of the marked
-        vertices, or 0 if no spanning forest induces it.
+        vertices, which is empty if no spanning forest induces it.
         """
         assert len(pattern) == len(marked)
         if set(pattern) == {'1'}:
             return self.tree_poly
-        return self.forest_polynomials(marked, len(set(pattern))).get(pattern, 0)
+        polys = self.forest_polynomials(marked, len(set(pattern)))
+        return polys.get(pattern, Polynomial(self.edge_vars, dict()))

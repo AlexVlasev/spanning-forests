@@ -12,9 +12,12 @@ import itertools
 import math
 import random
 
+import numpy as np
 import sympy as sym
 
-from polynomial import Polynomial
+# Monomial keys sum exponent * 3**e over edges e, and products of monomials
+# without squares have keys below 3**num_edges, which fits in a uint64 up to 40 edges
+MAX_NUMPY_EDGES = 40
 
 
 class IdentitySolver:
@@ -72,7 +75,7 @@ class IdentitySolver:
 
         return variables, reverse_variables, var_map
 
-    def get_equations(self, phi_P, phi_Q, sfps_P, sfps_Q, chunk_edges=6):
+    def get_equations(self, phi_P, phi_Q, sfps_P, sfps_Q, chunk_edges=8, use_numpy=True):
         """
         Builds the linear system for the a(i,j) in
 
@@ -90,16 +93,24 @@ class IdentitySolver:
         so sorting the terms of every polynomial by that part lets each chunk
         multiply only its own terms. Every pair of terms is still multiplied
         exactly once.
+
+        Graphs with up to MAX_NUMPY_EDGES edges multiply with numpy, unless
+        use_numpy is False, and larger ones in pure Python.
         """
         self.debug(f'\nMultiplying P, Q polynomial pairs: {len(sfps_P) * len(sfps_Q) + 1}')
         chunk_mask = (1 << min(chunk_edges, self.graph.num_edges)) - 1
+        use_numpy = use_numpy and self.graph.num_edges <= MAX_NUMPY_EDGES
 
         # Factor 0 is the left hand side, and factor k + 1 multiplies a(i,j) number k
         masks_P = [_masks(poly) for _, poly in sfps_P]
         masks_Q = [_masks(poly) for _, poly in sfps_Q]
         factors = [(_masks(phi_P), _masks(phi_Q))]
         factors.extend(itertools.product(masks_P, masks_Q))
-        buckets = [(_bucket(a, chunk_mask), _bucket(b, chunk_mask)) for a, b in factors]
+        if use_numpy:
+            bucket = lambda terms: _bucket_arrays(terms, self.graph.num_edges, chunk_mask)
+        else:
+            bucket = lambda terms: _bucket(terms, chunk_mask)
+        buckets = [(bucket(a), bucket(b)) for a, b in factors]
 
         chunks = dict()
         for x in range(chunk_mask + 1):
@@ -107,17 +118,12 @@ class IdentitySolver:
                 chunks.setdefault((x | y, x & y), []).append((x, y))
 
         self.debug(f'Building equations in {len(chunks)} chunks')
-        sparse_equations = set()
-        for pairs in chunks.values():
-            sparse_equations.update(_chunk_equations(buckets, pairs))
-
-        num_vars = len(factors) - 1
         equations = set()
-        for entries, constant in sparse_equations:
-            row = [0] * num_vars
-            for k, c in entries:
-                row[k] = c
-            equations.add((tuple(row), constant))
+        for pairs in chunks.values():
+            if use_numpy:
+                equations.update(_chunk_equations_numpy(buckets, pairs))
+            else:
+                equations.update(_dense(_chunk_equations(buckets, pairs), len(factors) - 1))
 
         self.debug(f'Remaining equations: {len(equations)}')
         return equations
@@ -291,6 +297,17 @@ def _chunk_equations(buckets, pairs):
     return equations
 
 
+def _dense(sparse_equations, num_vars):
+    """Converts equations with sparse rows to the dense rows of get_equations."""
+    equations = set()
+    for entries, constant in sparse_equations:
+        row = [0] * num_vars
+        for k, c in entries:
+            row[k] = c
+        equations.add((tuple(row), constant))
+    return equations
+
+
 def _bucket(terms, mask):
     """Sorts terms from _masks by which of the edges in mask they contain."""
     buckets = dict()
@@ -299,13 +316,92 @@ def _bucket(terms, mask):
     return buckets
 
 
+def _bucket_arrays(terms, num_edges, mask):
+    """
+    Like _bucket, but each bucket holds numpy arrays of the monomial keys and
+    coefficients of its terms. The key of a monomial is the sum of
+    exponent * 3**e over its edges e, so the key of a product of two
+    monomials without squares is the sum of their keys.
+    """
+    masks = np.array([m for m, _ in terms], dtype=np.uint64)
+    coeffs = np.array([c for _, c in terms], dtype=np.int64)
+    keys = np.zeros(len(terms), dtype=np.uint64)
+    for e in range(num_edges):
+        keys += ((masks >> np.uint64(e)) & np.uint64(1)) * np.uint64(3**e)
+
+    ids = masks & np.uint64(mask)
+    order = np.argsort(ids, kind='stable')
+    ids, keys, coeffs = ids[order], keys[order], coeffs[order]
+    values, starts = np.unique(ids, return_index=True)
+    ends = [*starts[1:], len(ids)]
+    return {int(v): (keys[s:e], coeffs[s:e]) for v, s, e in zip(values, starts, ends)}
+
+
+def _chunk_equations_numpy(buckets, pairs):
+    """
+    The equations of get_equations for the monomials in one chunk, from the
+    buckets of _bucket_arrays, with dense rows.
+    """
+    keys, columns, coeffs = [], [], []
+    for column, (buckets_a, buckets_b) in enumerate(buckets):
+        for x, y in pairs:
+            if x not in buckets_a or y not in buckets_b:
+                continue
+            keys_a, coeffs_a = buckets_a[x]
+            keys_b, coeffs_b = buckets_b[y]
+            keys.append(np.add.outer(keys_a, keys_b).ravel())
+            coeffs.append(np.multiply.outer(coeffs_a, coeffs_b).ravel())
+            columns.append(np.full(keys[-1].size, column, dtype=np.uint64))
+    if not keys:
+        return set()
+
+    # Sum the coefficients of each (monomial, column) into a dense matrix with
+    # the constant in column 0, and the coefficient of a(i,j) number k in column k + 1
+    keys = np.concatenate(keys)
+    columns = np.concatenate(columns)
+    coeffs = np.concatenate(coeffs)
+    num_columns = len(buckets)
+    if np.all(coeffs == 1) and int(keys.max()) * num_columns < 2**64:
+        # Every coefficient is 1, so count the (monomial, column) pairs, packed
+        # into one integer, which only needs a sort rather than an argsort
+        pairs, counts = np.unique(keys * np.uint64(num_columns) + columns, return_counts=True)
+        monomials = pairs // np.uint64(num_columns)
+        starts = np.concatenate(([True], monomials[1:] != monomials[:-1]))
+        rows = np.zeros((int(starts.sum()), num_columns), dtype=np.int64)
+        rows[np.cumsum(starts) - 1, (pairs % np.uint64(num_columns)).astype(np.int64)] = counts
+    else:
+        monomials, inverse = np.unique(keys, return_inverse=True)
+        index = inverse.ravel() * num_columns + columns.astype(np.int64)
+        # Weights are summed as floats, which is exact for these small integers
+        rows = np.rint(np.bincount(index, weights=coeffs, minlength=len(monomials) * num_columns))
+        rows = rows.astype(np.int64).reshape(len(monomials), num_columns)
+
+    gcd = np.gcd.reduce(rows, axis=1)
+    rows = rows[gcd > 0] // gcd[gcd > 0, None]
+    return {(tuple(int(c) for c in row[1:]), int(row[0])) for row in _unique_rows(rows)}
+
+
+def _unique_rows(rows):
+    """
+    The distinct rows of a matrix. Equivalent to np.unique(rows, axis=0), but
+    much faster for many rows: rows are grouped by a hash, and kept as is
+    after checking that every row equals the first of its group.
+    """
+    rng = np.random.default_rng(0)
+    weights = rng.integers(1, 2**62, size=rows.shape[1], dtype=np.int64)
+    with np.errstate(over='ignore'):
+        hashes = rows @ weights
+    _, first, inverse = np.unique(hashes, return_index=True, return_inverse=True)
+    if np.array_equal(rows, rows[first[inverse.ravel()]]):
+        return rows[first]
+    return np.unique(rows, axis=0)
+
+
 def _masks(poly):
     """
     The terms of a polynomial without squares, such as a spanning forest
     polynomial, as (bitmask of edges, coefficient) pairs.
     """
-    if not isinstance(poly, Polynomial):
-        return []
     terms = []
     for power, c in poly.coefficients.items():
         assert all(k <= 1 for k in power), 'Expected a polynomial without squares'
@@ -327,8 +423,6 @@ def _multiply_into(product, terms_a, terms_b):
 
 def _terms(poly):
     """The terms of a polynomial as (coefficient, edge indices) pairs, for fast evaluation."""
-    if not isinstance(poly, Polynomial):
-        return []
     return [
         (c, tuple(e for e, k in enumerate(power) for _ in range(k)))
         for power, c in poly.coefficients.items()
