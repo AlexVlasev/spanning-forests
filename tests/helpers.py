@@ -7,6 +7,7 @@ share any logic with the code under test.
 """
 
 import math
+import random
 from itertools import combinations
 
 from main import Solver, get_kn
@@ -102,3 +103,28 @@ def evaluate(poly, point):
     return sum(
         c * math.prod(x**k for x, k in zip(point, power)) for power, c in poly.coefficients.items()
     )
+
+
+def random_points(solver, seed, num_points=5):
+    rng = random.Random(seed)
+    for _ in range(num_points):
+        yield [rng.randint(1, 100) for _ in solver.edge_vars]
+
+
+def assert_identity(solver, lhs, rhs):
+    """
+    Checks phi_P * phi_Q == sum of coeff * phi_B * phi_A at random integer
+    points, where lhs = (P, Q) and rhs maps (B, A) pattern pairs to their
+    coefficients.
+
+    Exact integer arithmetic means a mismatch is a real failure, while
+    agreement at several random points makes a false positive vanishingly
+    unlikely.
+    """
+    patterns = {*lhs, *(p for pair in rhs for p in pair)}
+    polys = {p: solver.get_phi_P(p) for p in patterns}
+    for point in random_points(solver, seed=len(solver.edge_vars)):
+        value = {p: evaluate(poly, point) for p, poly in polys.items()}
+        left = value[lhs[0]] * value[lhs[1]]
+        right = sum(c * value[b] * value[a] for (b, a), c in rhs.items())
+        assert left == right

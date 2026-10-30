@@ -417,7 +417,9 @@ class Solver:
 
     def get_polynomial(self, phi_P, phi_Q, sfps_P, sfps_Q, variables, reverse_variables, var_map):
         self.debug(f'\nMultiplying P, Q polynomial pairs: {len(sfps_P) * len(sfps_Q) + 1}')
-        polynomials = [phi_P * phi_Q]
+        # Encodes phi_P * phi_Q = sum of a(i,j) * phi_P_k * phi_Q_k as
+        # -phi_P * phi_Q + sum of a(i,j) * phi_P_k * phi_Q_k = 0
+        polynomials = [-(phi_P * phi_Q)]
 
         for p, p_poly in sfps_P:
             for q, q_poly in sfps_Q:
@@ -447,9 +449,11 @@ class Solver:
         for p, c in polynomial.coefficients.items():
             if not isinstance(c, Polynomial):
                 continue
-            if len(c.coefficients.items()) == 1:
-                string = 'a' + str(c).split('a')[-1]
-                zero_vars.add(string)
+            # A monomial whose coefficient is a single a(i,j) forces it to be 0
+            if len(c.coefficients) == 1:
+                (power,) = c.coefficients
+                if any(power):
+                    zero_vars.add(c.variables[power.index(1)])
 
         self.debug(f'Number of zero variables: {len(zero_vars)}')
 
@@ -508,22 +512,16 @@ class Solver:
 
         self.debug(f'Extracting linear system')
         xs = sym.symbols(f'x_:{len(a_vars)}')
-        eqns = []
-        vec = []
+        rows = []
         for poly in equations:
             p = poly
             for x, v in zip(xs, a_vars):
                 p = p.apply(v, x)
-            expr = list(p.coefficients.items())
-            if len(expr) == 1:
-                eqns.append(expr[0][1])
-                vec.append(0)
-            else:
-                eqns.append(expr[1][1])
-                vec.append(expr[0][1])
+            # Substituting every a(i,j) moves all terms onto the constant
+            # monomial, so the equation is the sum of the coefficients = 0
+            rows.append(sum(p.coefficients.values()))
 
         self.debug(f'Solving linear system')
-        rows = [e - v for e, v in zip(eqns, vec)]
         # soln = sym.nonlinsolve(rows, xs)
         soln = sym.linsolve(rows, xs)
 
@@ -538,7 +536,7 @@ class Solver:
         self.debug(f'We have {len(a_vars)} a_i,j variables')
 
         variables = [*self.edge_vars, *variables]
-        zeros = [0 for _ in range(len(variables))]
+        zeros = [0 for _ in range(len(a_vars))]
         phi_P, phi_Q, sfps_P, sfps_Q = self.expand_polynomials(
             phi_P, phi_Q, sfps_P, sfps_Q, variables, zeros
         )
@@ -572,11 +570,21 @@ class Solver:
         print(f'Forbidden: {len(forbidden)}')
 
         print('\n====================================\n')
-        try:
-            soln = [f for f in soln][0]
-            print(soln)
-        except Exception:
+        # linsolve returns either EmptySet or a FiniteSet with one parametric solution
+        if not soln.args:
             print('No Solution')
+            return None
+        soln = soln.args[0].args
+        print(soln)
+
+        # Map each (P_k, Q_k) pattern pair to its coefficient a(i,j) in
+        # phi_P * phi_Q = sum of a(i,j) * phi_P_k * phi_Q_k
+        values = dict(zip(a_vars, soln))
+        solution = dict()
+        for pair, coords in var_map.items():
+            var = a_vars[reverse_variables[coords]]
+            solution[pair] = 0 if var in zero_vars else values[var]
+        return solution
 
     def expand_poly(self, poly, variables, zeros):
         new_coeffs = dict()
