@@ -590,36 +590,44 @@ class Solver:
             print(expr)
 
 
-start = time()
+if __name__ == '__main__':
+    start = time()
 
-# n = 5
-# vertices = [k for k in range(n-1)]
-# solver = Solver(get_kn(n), display_vars=None)
-# solver.set_vertices(vertices)
-# P = '1' * (n-1)
-# Q = ''.join(map(lambda x: str(x+1), vertices))
-# solver.solve_problem(P, Q)
+    # n = 5
+    # vertices = [k for k in range(n-1)]
+    # solver = Solver(get_kn(n), display_vars=None)
+    # solver.set_vertices(vertices)
+    # P = '1' * (n-1)
+    # Q = ''.join(map(lambda x: str(x+1), vertices))
+    # solver.solve_problem(P, Q)
 
-vertices = [0, 1, 2, 3, 4]
-solver = Solver(get_kn(6), display_vars=None)
-solver.set_vertices(vertices)
-P = '11111'
-Q = '12345'
-solver.solve_problem(P, Q, reduce=True)
+    # vertices = [0, 1, 2, 3, 4]
+    # solver = Solver(get_kn(6), display_vars=None)
+    # solver.set_vertices(vertices)
+    # P = '11111'
+    # Q = '12345'
+    # solver.solve_problem(P, Q, reduce=True)
 
-# vertices = [0, 1, 2]
-# solver = Solver(get_kn(5), display_vars=None)
-# solver.set_vertices(vertices)
-# P = '111'
-# Q = '123'
-# solver.solve_problem(P, Q, reduce=True)
+    # vertices = [0, 1, 2]
+    # solver = Solver(get_kn(5), display_vars=None)
+    # solver.set_vertices(vertices)
+    # P = '111'
+    # Q = '123'
+    # solver.solve_problem(P, Q, reduce=True)
 
-# vertices = [0, 1, 2, 3, 4]
-# solver = Solver(get_kn(6), display_vars=None)
-# solver.set_vertices(vertices)
-# P = '11122'
-# Q = '12345'
-# solver.solve_problem(P, Q, reduce=False)
+    # vertices = [0, 1, 2, 3, 4]
+    # solver = Solver(get_kn(6), display_vars=None)
+    # solver.set_vertices(vertices)
+    # P = '11122'
+    # Q = '12345'
+    # solver.solve_problem(P, Q, reduce=False)
 
-end = time()
-print(f'\nComputation took: {int(100*(end-start))/100} sec')
+    vertices = [0, 1, 2, 3]
+    solver = Solver(get_kn(5), display_vars=None)
+    solver.set_vertices(vertices)
+    P = '1111'
+    Q = '1234'
+    solver.solve_problem(P, Q, reduce=True)
+
+    end = time()
+    print(f'\nComputation took: {int(100*(end-start))/100} sec')
