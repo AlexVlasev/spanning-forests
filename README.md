@@ -101,6 +101,9 @@ For comparison, the original version took about 8 s on the $K_6$ search and 40 s
 
 - `graph.py`: the `Graph` class, with its spanning trees, tree and graph polynomials, and spanning forest polynomials.
 - `identities.py`: the `IdentitySolver`, which searches for identities numerically and verifies them symbolically.
+- `evaluation.py`: the linear system from exact evaluations at random points, modulo a few primes, with the Chinese remainder theorem.
+- `equations.py`: the exact linear system from expanding every product, in chunks, with NumPy or pure Python.
+- `solution.py`: the `Solution` class for a family of identities, with its report.
 - `main.py`: the command line interface.
 - `polynomial.py`: a small multivariate polynomial class.
 - `tests/`: checks against brute-force forest enumeration, known identities, and the matrix-tree theorem.

@@ -4,8 +4,9 @@ import numpy as np
 import pytest
 import sympy
 
+from equations import _unique_runs
+from evaluation import crt, evaluate_all, evaluate_all_numpy
 from helpers import GRAPHS, adjacency, assert_identity, make_solver
-from identities import _crt, _evaluate_all, _evaluate_all_numpy, _unique_runs
 from polynomial import Polynomial
 from solution import Solution, classify
 
@@ -86,8 +87,8 @@ def test_numpy_evaluation_with_negative_and_large_coefficients():
     coefficients = {(1, 1, 0): -3, (0, 2, 1): 10**30, (0, 0, 0): -(10**25), (1, 0, 0): 7}
     poly = Polynomial(variables, coefficients)
     points = [[1, 2, 3], [1000, 999, 998], [5, 1, 1000]]
-    assert _evaluate_all_numpy(poly, points) == _evaluate_all(poly, points)
-    assert _evaluate_all_numpy(Polynomial(variables, {}), points) == [0, 0, 0]
+    assert evaluate_all_numpy(poly, points) == evaluate_all(poly, points)
+    assert evaluate_all_numpy(Polynomial(variables, {}), points) == [0, 0, 0]
 
 
 def runs_of(columns, coeffs, runs):
@@ -120,7 +121,7 @@ def test_unique_runs(monkeypatch):
 def test_crt():
     primes = [7, 11, 13]
     for value in (0, 1, 500, 1000):
-        assert _crt([value % p for p in primes], primes) == value
+        assert crt([value % p for p in primes], primes) == value
 
 
 def test_numpy_equations_with_coefficients_other_than_one():
