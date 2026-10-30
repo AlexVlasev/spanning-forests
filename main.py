@@ -3,13 +3,14 @@ Searches for quadratic spanning forest polynomial identities from the command li
 
 Examples:
 
-    python main.py 111 123 --graph K5 --reduce
-    python main.py 1111 1234 --graph K6 --reduce --verify
+    python main.py 111 123 --graph K5 --balanced
+    python main.py 1111 1234 --graph K6 --balanced --verify
     python main.py 11122 12345 --graph K6
     python main.py 111 123 --graph 0-1,1-2,2-3,3-0,0-2 --marked 0,1,3
 """
 
 import argparse
+import logging
 import sys
 from time import time
 
@@ -64,7 +65,7 @@ def main(argv=None):
         help='marked vertices like 0,1,2 (default: the first len(P))',
     )
     parser.add_argument(
-        '--reduce', action='store_true', help='balance the number of parts of the P_i and Q_j'
+        '--balanced', action='store_true', help='balance the number of parts of the P_i and Q_j'
     )
     parser.add_argument(
         '--verify', action='store_true', help='confirm the solution symbolically (slow)'
@@ -78,9 +79,13 @@ def main(argv=None):
     if max(marked) >= len(args.graph):
         parser.error(f'the graph has no vertex {max(marked)}')
 
+    # Progress messages are logged at INFO level, to stderr
+    level = logging.WARNING if args.quiet else logging.INFO
+    logging.basicConfig(format='%(message)s', level=level, force=True)
+
     start = time()
-    solver = IdentitySolver(Graph(args.graph), marked, verbose=not args.quiet)
-    solution = solver.solve_problem(args.P, args.Q, reduce=args.reduce, verify=args.verify)
+    solver = IdentitySolver(Graph(args.graph), marked)
+    solution = solver.solve_problem(args.P, args.Q, balanced=args.balanced, verify=args.verify)
 
     print('\n====================================\n')
     if solution is None:

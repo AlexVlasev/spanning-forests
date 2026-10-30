@@ -26,7 +26,7 @@ def test_parse_vertices():
 
 
 def test_main_prints_identity(capsys):
-    assert main(['111', '123', '--graph', 'K5', '--reduce', '--verify', '--quiet']) == 0
+    assert main(['111', '123', '--graph', 'K5', '--balanced', '--verify', '--quiet']) == 0
     out = capsys.readouterr().out
     assert 'Dimension: 3' in out
     assert 'Verified symbolically' in out
@@ -35,7 +35,7 @@ def test_main_prints_identity(capsys):
 
 
 def test_main_with_custom_graph_and_marked_vertices(capsys):
-    args = ['111', '123', '--graph', '0-1,1-2,2-3,3-0,0-2', '--marked', '0,1,3', '--reduce', '-q']
+    args = ['111', '123', '--graph', '0-1,1-2,2-3,3-0,0-2', '--marked', '0,1,3', '--balanced', '-q']
     assert main(args) == 0
     assert 'Dimension:' in capsys.readouterr().out
 

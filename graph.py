@@ -13,6 +13,9 @@ import numpy as np
 
 from polynomial import MultilinearPolynomial
 
+# Patterns label the parts of a partition with the digits 1 to 9
+MAX_PARTS = 9
+
 
 def complete_graph(n):
     """The adjacency matrix of the complete graph K_n."""
@@ -21,7 +24,6 @@ def complete_graph(n):
 
 class Graph:
     def __init__(self, matrix):
-        self.matrix = matrix
         self.num_vertices = len(matrix)
 
         self.edges = []
@@ -128,6 +130,10 @@ class Graph:
         whose marked vertices span fewer than k trees has a tree without any
         marked vertex, so it belongs to no pattern.
         """
+        # Patterns label parts with single digits
+        if not 1 <= num_parts <= MAX_PARTS:
+            raise ValueError(f'expected 1 to {MAX_PARTS} parts, got {num_parts}')
+
         key = (tuple(marked), num_parts)
         if key not in self._forest_polynomials:
             self._forest_polynomials[key] = self._compute_forest_polynomials(marked, num_parts)

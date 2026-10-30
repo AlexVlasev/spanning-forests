@@ -11,17 +11,17 @@ import math
 import random
 
 import numpy as np
-import sympy as sym
 
 from polynomial import edge_indices
 
 # Random points have coordinates from 1 to MAX_POINT
 MAX_POINT = 1000
 
-# Primes below 2**31 for evaluating modulo p, so that products of two residues fit in an int64
-EVALUATION_PRIMES = [2**31 - 1]
-while len(EVALUATION_PRIMES) < 16:
-    EVALUATION_PRIMES.append(sym.prevprime(EVALUATION_PRIMES[-1]))
+# The largest primes below 2**31, for evaluating modulo p, so that products of
+# two residues fit in an int64
+EVALUATION_PRIMES = [
+    2**31 - d for d in (1, 19, 61, 69, 85, 99, 105, 151, 159, 171, 225, 249, 295, 325, 379, 399)
+]
 
 
 def random_points(num_points, num_edges, seed=0):
@@ -96,6 +96,8 @@ def evaluate_all_numpy(poly, points, block_size=2**22):
     bound = 2 * sum(abs(c) for c, _ in terms) * max(map(max, points)) ** degree
     primes = []
     while math.prod(primes) <= bound:
+        if len(primes) == len(EVALUATION_PRIMES):
+            raise ValueError('values too large to recover from the evaluation primes')
         primes.append(EVALUATION_PRIMES[len(primes)])
 
     # Evaluate in blocks of terms to bound the size of the (points, terms) arrays

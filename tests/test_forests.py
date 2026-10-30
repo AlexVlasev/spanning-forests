@@ -50,3 +50,9 @@ def test_forest_polynomials_are_cached():
 def test_forest_polys_with_arbitrary_marked_vertices(name, marked):
     for k in range(1, len(marked) + 1):
         assert_forest_polys_match(GRAPHS[name], marked, k)
+
+
+@pytest.mark.parametrize('num_parts', [0, 10])
+def test_forest_polynomials_reject_unsupported_numbers_of_parts(num_parts):
+    with pytest.raises(ValueError, match='expected 1 to 9 parts'):
+        Graph(GRAPHS['K4']).forest_polynomials([0, 1, 2], num_parts)

@@ -1,3 +1,4 @@
+import logging
 import random
 
 import numpy as np
@@ -11,7 +12,7 @@ from polynomial import MultilinearPolynomial
 from solution import Solution, classify
 
 CASES = [
-    # name, marked, P, Q, reduce, expected dimension of the solution space
+    # name, marked, P, Q, balanced, expected dimension of the solution space
     ('K4', [0, 1, 2], '111', '123', True, 3),
     ('K5', [0, 1, 2], '111', '123', True, 3),
     ('K5', [0, 1, 2], '112', '123', False, 0),
@@ -22,14 +23,14 @@ CASES = [
 ]
 
 
-def solve(name, marked, P, Q, reduce):
+def solve(name, marked, P, Q, balanced):
     solver = make_solver(GRAPHS[name], marked)
-    return solver, solver.solve_problem(P, Q, reduce)
+    return solver, solver.solve_problem(P, Q, balanced)
 
 
-@pytest.mark.parametrize('name, marked, P, Q, reduce, dimension', CASES)
-def test_solution_family_satisfies_identity(name, marked, P, Q, reduce, dimension):
-    solver, solution = solve(name, marked, P, Q, reduce)
+@pytest.mark.parametrize('name, marked, P, Q, balanced, dimension', CASES)
+def test_solution_family_satisfies_identity(name, marked, P, Q, balanced, dimension):
+    solver, solution = solve(name, marked, P, Q, balanced)
 
     assert solution.dimension == dimension
 
@@ -41,19 +42,19 @@ def test_solution_family_satisfies_identity(name, marked, P, Q, reduce, dimensio
         assert_identity(solver, (P, Q), rhs)
 
 
-@pytest.mark.parametrize('name, marked, P, Q, reduce, dimension', CASES)
-def test_classification_covers_every_coefficient(name, marked, P, Q, reduce, dimension):
-    _, solution = solve(name, marked, P, Q, reduce)
+@pytest.mark.parametrize('name, marked, P, Q, balanced, dimension', CASES)
+def test_classification_covers_every_coefficient(name, marked, P, Q, balanced, dimension):
+    _, solution = solve(name, marked, P, Q, balanced)
     classes = solution.classify()
 
     assert sum(len(c) for c in classes.values()) == len(solution.coefficients)
     assert len(classes['free']) == dimension
 
 
-@pytest.mark.parametrize('name, marked, P, Q, reduce, dimension', CASES)
-def test_numeric_and_symbolic_systems_agree(name, marked, P, Q, reduce, dimension):
+@pytest.mark.parametrize('name, marked, P, Q, balanced, dimension', CASES)
+def test_numeric_and_symbolic_systems_agree(name, marked, P, Q, balanced, dimension):
     solver = make_solver(GRAPHS[name], marked)
-    problem = solver.problem(P, Q, reduce)
+    problem = solver.problem(P, Q, balanced)
     num_vars = len(problem.pairs)
 
     numeric = solver.get_numeric_equations(problem)
@@ -66,7 +67,7 @@ def test_numeric_and_symbolic_systems_agree(name, marked, P, Q, reduce, dimensio
 )
 def test_chunking_and_numpy_do_not_change_equations(name, marked, P, Q):
     solver = make_solver(GRAPHS[name], marked)
-    problem = solver.problem(P, Q, reduce=True)
+    problem = solver.problem(P, Q, balanced=True)
 
     expected = solver.get_equations(problem, chunk_edges=0, use_numpy=False)
     for use_numpy in (False, True):
@@ -74,10 +75,10 @@ def test_chunking_and_numpy_do_not_change_equations(name, marked, P, Q):
             assert solver.get_equations(problem, chunk_edges, use_numpy) == expected
 
 
-@pytest.mark.parametrize('name, marked, P, Q, reduce, dimension', CASES)
-def test_numpy_evaluation_gives_the_same_numeric_equations(name, marked, P, Q, reduce, dimension):
+@pytest.mark.parametrize('name, marked, P, Q, balanced, dimension', CASES)
+def test_numpy_evaluation_gives_the_same_numeric_equations(name, marked, P, Q, balanced, dimension):
     solver = make_solver(GRAPHS[name], marked)
-    problem = solver.problem(P, Q, reduce)
+    problem = solver.problem(P, Q, balanced)
     expected = solver.get_numeric_equations(problem, use_numpy=False)
     assert solver.get_numeric_equations(problem, use_numpy=True) == expected
 
@@ -137,14 +138,14 @@ def test_numpy_equations_with_coefficients_other_than_one():
 def test_numpy_equations_with_empty_polynomials():
     # In a disconnected graph phi_P is 0, so the identity has no solution
     solver = make_solver(adjacency(5, [(0, 1), (1, 2), (3, 4)]), [0, 1, 2])
-    problem = solver.problem('111', '123', reduce=True)
+    problem = solver.problem('111', '123', balanced=True)
     expected = solver.get_equations(problem, use_numpy=False)
     assert solver.get_equations(problem, use_numpy=True) == expected
 
 
-@pytest.mark.parametrize('name, marked, P, Q, reduce, dimension', CASES)
-def test_verify_solution(name, marked, P, Q, reduce, dimension):
-    solver, solution = solve(name, marked, P, Q, reduce)
+@pytest.mark.parametrize('name, marked, P, Q, balanced, dimension', CASES)
+def test_verify_solution(name, marked, P, Q, balanced, dimension):
+    solver, solution = solve(name, marked, P, Q, balanced)
     assert solver.verify_solution(solution)
 
     # Changing any nonzero coefficient breaks the identity
@@ -156,7 +157,7 @@ def test_verify_solution(name, marked, P, Q, reduce, dimension):
 
 def test_solve_problem_with_verify():
     solver = make_solver(GRAPHS['K5'], [0, 1, 2, 3])
-    assert solver.solve_problem('1111', '1234', reduce=True, verify=True).verified is True
+    assert solver.solve_problem('1111', '1234', balanced=True, verify=True).verified is True
 
 
 def test_classify_solution():
@@ -169,3 +170,26 @@ def test_classify_solution():
         'fixed': ['c', 'd'],
         'dependent': ['e', 'f'],
     }
+
+
+def test_evaluation_primes_are_the_largest_primes_below_2_31():
+    from evaluation import EVALUATION_PRIMES
+
+    assert EVALUATION_PRIMES == sorted(EVALUATION_PRIMES, reverse=True)
+    expected = [sympy.prevprime(2**31)]
+    while len(expected) < len(EVALUATION_PRIMES):
+        expected.append(sympy.prevprime(expected[-1]))
+    assert EVALUATION_PRIMES == expected
+
+
+def test_progress_is_logged(caplog):
+    solver = make_solver(GRAPHS['K5'], [0, 1, 2])
+    with caplog.at_level(logging.INFO, logger='identities'):
+        solver.solve_problem('111', '123', balanced=True)
+    assert 'Solving for 9 unknowns' in caplog.text
+
+
+def test_numpy_evaluation_rejects_values_too_large_for_the_primes():
+    poly = MultilinearPolynomial(['x'], {0b1: 10**300})
+    with pytest.raises(ValueError, match='too large'):
+        evaluate_all_numpy(poly, [[1]])

@@ -14,7 +14,7 @@ For a graph $G$ and a partition $P$ of some of its vertices (the marked vertices
 
 - **Monomials are the edges in the forest.** This is the reverse of Brown and Yeats, who use the edges not in the forest. With one part, $\Phi$ is the Kirchhoff (tree) polynomial, and $\psi_G$ is its reciprocal.
 - **Partitions are written as patterns**, one digit per marked vertex, numbering parts in order of first appearance. With marked vertices `[0, 1, 2, 3]`, the pattern `1213` means the partition $\{0, 2\}, \{1\}, \{3\}$. Patterns are sorted, which fixes the numbering of the $a_{ij}$.
-- **Partition sizes.** By default the $P_i$ have $|P| + 1$ parts and the $Q_j$ have $|Q| - 1$. With `reduce=True` they have $\lfloor (|P|+|Q|)/2 \rfloor$ and $\lceil (|P|+|Q|)/2 \rceil$ parts.
+- **Partition sizes.** By default the $P_i$ have $|P| + 1$ parts and the $Q_j$ have $|Q| - 1$. With `balanced=True` they have $\lfloor (|P|+|Q|)/2 \rfloor$ and $\lceil (|P|+|Q|)/2 \rceil$ parts.
 
 ## How it works
 
@@ -28,7 +28,7 @@ For a graph $G$ and a partition $P$ of some of its vertices (the marked vertices
 ```bash
 pipenv install --dev
 pipenv run pytest
-pipenv run python main.py 1111 1234 --graph K6 --reduce --verify
+pipenv run python main.py 1111 1234 --graph K6 --balanced --verify
 pipenv run python main.py --help
 ```
 
@@ -42,7 +42,7 @@ from identities import IdentitySolver
 
 solver = IdentitySolver(Graph(complete_graph(6)), marked=[0, 1, 2, 3])
 
-solution = solver.solve_problem('1111', '1234', reduce=True, verify=True)
+solution = solver.solve_problem('1111', '1234', balanced=True, verify=True)
 solution.coefficients  # maps (P_i, Q_j) pattern pairs to coefficients, with free parameters
 solution.dimension     # 8
 solution.verified      # True
@@ -64,7 +64,7 @@ It holds on every graph tested: $K_4$, $K_5$, the house graph and the triangular
 
 ### Four marked vertices
 
-For $P$ = `1111`, $Q$ = `1234` with `reduce=True`, there are 42 unknowns $a_{ij}$ (7 two-part $P_i$, the paper's $B$'s, times 6 three-part $Q_j$, the $A$'s). The solution is an **8-dimensional affine family**, matching the paper:
+For $P$ = `1111`, $Q$ = `1234` with `balanced=True`, there are 42 unknowns $a_{ij}$ (7 two-part $P_i$, the paper's $B$'s, times 6 three-part $Q_j$, the $A$'s). The solution is an **8-dimensional affine family**, matching the paper:
 
 | Graph | Free | Dependent | Forbidden |
 |---|---|---|---|

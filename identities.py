@@ -9,11 +9,15 @@ points (see evaluation.py), and can then be verified symbolically by
 expanding every product (see equations.py).
 """
 
+import logging
+
 import sympy as sym
 
 from equations import exact_equations
 from evaluation import numeric_equations
 from solution import Solution
+
+logger = logging.getLogger(__name__)
 
 
 class Problem:
@@ -37,30 +41,31 @@ class Problem:
 
 
 class IdentitySolver:
-    def __init__(self, graph, marked, verbose=False):
+    """Searches for identities between the forest polynomials of a graph with marked vertices."""
+
+    def __init__(self, graph, marked):
         self.graph = graph
         self.marked = marked
-        self.verbose = verbose
 
-    def problem(self, P, Q, reduce=False):
+    def problem(self, P, Q, balanced=False):
         """
         The Problem for P and Q, where by default the P_i have one part more
-        than P and the Q_j one part fewer than Q. With reduce=True, the
+        than P and the Q_j one part fewer than Q. With balanced=True, the
         numbers of parts are balanced instead, with the P_i having the fewer.
         """
         p, q = len(set(P)), len(set(Q))
-        if reduce:
+        if balanced:
             return self._problem(P, Q, (p + q) // 2, (p + q + 1) // 2)
         return self._problem(P, Q, p + 1, q - 1)
 
     def _problem(self, P, Q, parts_P, parts_Q):
         phi_P = self.graph.forest_polynomial(self.marked, P)
         phi_Q = self.graph.forest_polynomial(self.marked, Q)
-        self.debug(f'Polynomials {P} and {Q} have {len(phi_P)} and {len(phi_Q)} terms')
+        logger.info(f'Polynomials {P} and {Q} have {len(phi_P)} and {len(phi_Q)} terms')
 
         rhs_P = self.graph.forest_polynomials(self.marked, parts_P)
         rhs_Q = self.graph.forest_polynomials(self.marked, parts_Q)
-        self.debug(
+        logger.info(
             f'Found {len(rhs_P)} P_i with {parts_P} parts and '
             f'{len(rhs_Q)} Q_j with {parts_Q} parts'
         )
@@ -69,9 +74,9 @@ class IdentitySolver:
 
     def get_equations(self, problem, chunk_edges=8, use_numpy=True):
         """The exact linear system of a Problem, from equations.exact_equations."""
-        self.debug(f'Multiplying {len(problem.pairs) + 1} pairs of polynomials')
+        logger.info(f'Multiplying {len(problem.pairs) + 1} pairs of polynomials')
         equations = exact_equations(problem, self.graph.num_edges, chunk_edges, use_numpy)
-        self.debug(f'Found {len(equations)} distinct equations')
+        logger.info(f'Found {len(equations)} distinct equations')
         return equations
 
     def get_numeric_equations(self, problem, extra_points=10, seed=0, use_numpy=True):
@@ -80,7 +85,7 @@ class IdentitySolver:
         evaluation.numeric_equations. Use verify_solution to confirm a
         solution symbolically.
         """
-        self.debug(f'Evaluating polynomials at {len(problem.pairs) + extra_points} random points')
+        logger.info(f'Evaluating polynomials at {len(problem.pairs) + extra_points} random points')
         return numeric_equations(problem, self.graph.num_edges, extra_points, seed, use_numpy)
 
     def verify_solution(self, solution):
@@ -95,7 +100,7 @@ class IdentitySolver:
         return self._verify(problem, solution)
 
     def _verify(self, problem, solution):
-        self.debug('Verifying solution symbolically')
+        logger.info('Verifying solution symbolically')
         coefficients = [solution.coefficients[pair] for pair in problem.pairs]
         for row, constant in self.get_equations(problem):
             lhs = sum((r * c for r, c in zip(row, coefficients) if r), sym.Integer(0))
@@ -109,7 +114,7 @@ class IdentitySolver:
         as a tuple of sympy expressions in free parameters x_0, x_1, ..., or
         None if there is no solution.
         """
-        self.debug(f'Solving linear system')
+        logger.info('Solving linear system')
         xs = sym.symbols(f'x_:{num_vars}')
         # Sort to keep the parametrization of the solution reproducible
         equations = sorted(equations)
@@ -119,15 +124,15 @@ class IdentitySolver:
         # linsolve returns either EmptySet or a FiniteSet with one parametric solution
         return solutions.args[0].args if solutions.args else None
 
-    def solve_problem(self, P, Q, reduce=False, verify=False):
+    def solve_problem(self, P, Q, balanced=False, verify=False):
         """
         Finds the family of identities phi_P * phi_Q = sum of c * phi_P_i * phi_Q_j
         from random evaluations, as a Solution, or None if there is none.
         With verify=True the family is also confirmed symbolically, which is
         much slower, and the result stored in Solution.verified.
         """
-        problem = self.problem(P, Q, reduce)
-        self.debug(f'Solving for {len(problem.pairs)} unknowns')
+        problem = self.problem(P, Q, balanced)
+        logger.info(f'Solving for {len(problem.pairs)} unknowns')
 
         values = self.solve_system(self.get_numeric_equations(problem), len(problem.pairs))
         if values is None:
@@ -138,7 +143,3 @@ class IdentitySolver:
             # Can only fail if the random points were degenerate
             solution.verified = self._verify(problem, solution)
         return solution
-
-    def debug(self, expr):
-        if self.verbose:
-            print(expr)
