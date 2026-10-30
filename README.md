@@ -27,16 +27,20 @@ For a graph $G$ and a partition $P$ of some of its vertices (the marked vertices
 
 ```bash
 pipenv install --dev
-pipenv run python main.py   # runs the example at the bottom of main.py
 pipenv run pytest
+pipenv run python main.py 1111 1234 --graph K6 --reduce --verify
+pipenv run python main.py --help
 ```
 
-```python
-from main import Solver, get_kn
+The command line takes the partitions $P$ and $Q$ as patterns, a graph as `K<n>` or an edge list like `0-1,1-2,2-0`, and optionally the marked vertices (by default the first `len(P)`). It prints the solution family and the identity in terms of the partitions.
 
-solver = Solver(get_kn(6))
-solver.debug_print = False
-solver.set_vertices([0, 1, 2, 3])
+From Python:
+
+```python
+from graph import Graph, complete_graph
+from identities import IdentitySolver
+
+solver = IdentitySolver(Graph(complete_graph(6)), marked=[0, 1, 2, 3])
 
 # Maps (P_i, Q_j) pattern pairs to coefficients, which may contain free parameters
 solution = solver.solve_problem('1111', '1234', reduce=True, verify=True)
@@ -66,19 +70,23 @@ One member (all free parameters set to 0) is in [tests/test_identities.py](tests
 
 ### Performance
 
-Four-vertex search ($P$ = `1111`, $Q$ = `1234`) on $K_n$, on a Mac. Peak memory is cumulative across the phases.
+Four-vertex search ($P$ = `1111`, $Q$ = `1234`) on $K_n$, on a Mac. Peak memory is cumulative across the phases. The chunked columns use the default `chunk_edges=6` in `get_equations`.
 
-| Graph | Spanning trees | Build | Search | Verify | Peak memory |
-|---|---|---|---|---|---|
-| $K_5$ | 125 | < 0.01 s | 0.29 s | 0.01 s | 66 MB |
-| $K_6$ | 1,296 | 0.01 s | 0.37 s | 0.09 s | 81 MB |
-| $K_7$ | 16,807 | 0.09 s | 0.96 s | 6.9 s | 1.1 GB |
-| $K_8$ | 262,144 | 1.85 s | 11.6 s | *running* | *running* |
+| Graph | Spanning trees | Build | Search | Verify | Peak memory | Verify (chunked) | Peak memory (chunked) |
+|---|---|---|---|---|---|---|---|
+| $K_5$ | 125 | < 0.01 s | 0.29 s | 0.01 s | 66 MB | 0.02 s | 66 MB |
+| $K_6$ | 1,296 | 0.01 s | 0.37 s | 0.09 s | 81 MB | 0.11 s | 68 MB |
+| $K_7$ | 16,807 | 0.09 s | 0.96 s | 6.9 s | 1.1 GB | 5.9 s | 201 MB |
+| $K_8$ | 262,144 | 1.85 s | 11.7 s | stopped at 16 GB | > 16 GB | 19 min | 13.6 GB |
+
+Verification multiplies every pair of terms (3.6 billion on $K_8$), and before chunking it held a sparse row for every distinct product monomial. Extrapolating from $K_6$ and $K_7$ (about 0.3–0.45 µs per term pair and 500 bytes per monomial), $K_8$ verification would have needed about 20 minutes and 75–80 GB. Chunking builds the equations for one group of monomials at a time, which brings the peak down to the size of the largest group, while the time stays about the same.
 
 For comparison, the original version took about 8 s on the $K_6$ search and 40 s on $K_7$, with no separate verification.
 
 ## Project layout
 
-- `main.py`: the `Solver` (spanning trees, forest polynomials, identity search) and an example run.
+- `graph.py`: the `Graph` class, with its spanning trees, tree and graph polynomials, and spanning forest polynomials.
+- `identities.py`: the `IdentitySolver`, which searches for identities numerically and verifies them symbolically.
+- `main.py`: an example run.
 - `polynomial.py`: a small multivariate polynomial class.
 - `tests/`: checks against brute-force forest enumeration, known identities, and the matrix-tree theorem.
