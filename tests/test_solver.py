@@ -48,6 +48,34 @@ def test_classification_covers_every_coefficient(name, marked, P, Q, reduce, dim
     assert len(classes['free']) == dimension
 
 
+@pytest.mark.parametrize('name, marked, P, Q, reduce, dimension', CASES)
+def test_numeric_and_symbolic_systems_agree(name, marked, P, Q, reduce, dimension):
+    solver = make_solver(GRAPHS[name], marked)
+    phi_P, phi_Q = solver.get_lhs(P, Q)
+    sfps_P, sfps_Q = solver.get_rhs(P, Q, reduce)
+    a_vars, _, _ = solver.get_abstract_vars(sfps_P, sfps_Q)
+
+    numeric = solver.get_numeric_equations(phi_P, phi_Q, sfps_P, sfps_Q)
+    symbolic = solver.get_equations(phi_P, phi_Q, sfps_P, sfps_Q)
+    assert solver.solve_system(numeric, a_vars) == solver.solve_system(symbolic, a_vars)
+
+
+@pytest.mark.parametrize('name, marked, P, Q, reduce, dimension', CASES)
+def test_verify_solution(name, marked, P, Q, reduce, dimension):
+    solver, solution = solve(name, marked, P, Q, reduce)
+    assert solver.verify_solution(P, Q, solution, reduce)
+
+    # Changing any nonzero coefficient breaks the identity
+    pair = next(pair for pair, c in solution.items() if c != 0)
+    tampered = {**solution, pair: solution[pair] + 1}
+    assert not solver.verify_solution(P, Q, tampered, reduce)
+
+
+def test_solve_problem_with_verify():
+    solver = make_solver(GRAPHS['K5'], [0, 1, 2, 3])
+    assert solver.solve_problem('1111', '1234', reduce=True, verify=True) is not None
+
+
 def test_classify_solution():
     x, y = sympy.symbols('x y')
     values = {'a': 0, 'b': x, 'c': 1, 'd': -2, 'e': 1 - x, 'f': 2 * y}

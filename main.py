@@ -1,5 +1,6 @@
 import math
 import itertools
+import random
 import sympy as sym
 
 from time import time
@@ -285,6 +286,70 @@ class Solver:
         self.debug(f'Remaining equations: {len(equations)}')
         return equations
 
+    @staticmethod
+    def _terms(poly):
+        """The terms of a polynomial as (coefficient, edge indices) pairs, for fast evaluation."""
+        if not isinstance(poly, Polynomial):
+            return []
+        return [
+            (c, tuple(e for e, k in enumerate(power) for _ in range(k)))
+            for power, c in poly.coefficients.items()
+        ]
+
+    @staticmethod
+    def _evaluate(terms, point):
+        return sum(c * math.prod(point[e] for e in edges) for c, edges in terms)
+
+    def get_numeric_equations(self, phi_P, phi_Q, sfps_P, sfps_Q, extra_points=10, seed=0):
+        """
+        Builds a linear system for the a(i,j) in
+
+            phi_P * phi_Q = sum of a(i,j) * phi_P_i * phi_Q_j
+
+        by evaluating both sides exactly at random integer points, with one
+        equation per point, in the same (row, constant) form as get_equations.
+
+        Each point gives a random combination of the equations of
+        get_equations, so with a few more points than unknowns both systems
+        have the same solutions, except with vanishingly small probability.
+        Use verify_solution to confirm a solution symbolically.
+        """
+        num_points = len(sfps_P) * len(sfps_Q) + extra_points
+        self.debug(f'Evaluating polynomials at {num_points} random points')
+        rng = random.Random(seed)
+        terms_lhs = [self._terms(phi_P), self._terms(phi_Q)]
+        terms_P = [self._terms(poly) for _, poly in sfps_P]
+        terms_Q = [self._terms(poly) for _, poly in sfps_Q]
+
+        equations = []
+        for _ in range(num_points):
+            point = [rng.randint(1, 1000) for _ in range(self.num_edges)]
+            values_P = [self._evaluate(terms, point) for terms in terms_P]
+            values_Q = [self._evaluate(terms, point) for terms in terms_Q]
+            row = tuple(p * q for p in values_P for q in values_Q)
+            constant = math.prod(self._evaluate(terms, point) for terms in terms_lhs)
+            equations.append((row, constant))
+        return equations
+
+    def verify_solution(self, P, Q, solution, reduce=False):
+        """
+        Confirms symbolically that every member of a solution family returned
+        by solve_problem satisfies the identity, using the exact system of
+        get_equations.
+        """
+        phi_P, phi_Q = self.get_lhs(P, Q)
+        sfps_P, sfps_Q = self.get_rhs(P, Q, reduce=reduce)
+        return self._verify(phi_P, phi_Q, sfps_P, sfps_Q, solution)
+
+    def _verify(self, phi_P, phi_Q, sfps_P, sfps_Q, solution):
+        self.debug('Verifying solution symbolically')
+        coefficients = [solution[(p, q)] for p, _ in sfps_P for q, _ in sfps_Q]
+        for row, constant in self.get_equations(phi_P, phi_Q, sfps_P, sfps_Q):
+            lhs = sum((r * c for r, c in zip(row, coefficients) if r), sym.Integer(0))
+            if sym.expand(lhs - constant) != 0:
+                return False
+        return True
+
     def solve_system(self, equations, a_vars):
         self.debug(f'Solving linear system')
         xs = sym.symbols(f'x_:{len(a_vars)}')
@@ -294,13 +359,18 @@ class Solver:
         b = sym.Matrix([constant for _, constant in equations])
         return sym.linsolve((A, b), xs)
 
-    def solve_problem(self, P, Q, reduce=False):
+    def solve_problem(self, P, Q, reduce=False, verify=False):
+        """
+        Finds the family of identities phi_P * phi_Q = sum of a(i,j) * phi_P_k * phi_Q_k
+        from random evaluations. With verify=True the family is also
+        confirmed symbolically, which is much slower.
+        """
         phi_P, phi_Q = self.get_lhs(P, Q)
         sfps_P, sfps_Q = self.get_rhs(P, Q, reduce=reduce)
         a_vars, reverse_variables, var_map = self.get_abstract_vars(sfps_P, sfps_Q)
         self.debug(f'We have {len(a_vars)} a_i,j variables')
 
-        equations = self.get_equations(phi_P, phi_Q, sfps_P, sfps_Q)
+        equations = self.get_numeric_equations(phi_P, phi_Q, sfps_P, sfps_Q)
         soln = self.solve_system(equations, a_vars)
 
         # linsolve returns either EmptySet or a FiniteSet with one parametric solution
@@ -330,7 +400,18 @@ class Solver:
 
         # Map each (P_k, Q_k) pattern pair to its coefficient a(i,j) in
         # phi_P * phi_Q = sum of a(i,j) * phi_P_k * phi_Q_k
-        return {pair: values[a_vars[reverse_variables[coords]]] for pair, coords in var_map.items()}
+        solution = {
+            pair: values[a_vars[reverse_variables[coords]]] for pair, coords in var_map.items()
+        }
+
+        if verify:
+            if not self._verify(phi_P, phi_Q, sfps_P, sfps_Q, solution):
+                # Only possible if the random points were degenerate
+                print('\nSymbolic verification FAILED')
+                return None
+            print('\nVerified symbolically')
+
+        return solution
 
     @staticmethod
     def classify_solution(values):
