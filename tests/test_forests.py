@@ -21,21 +21,10 @@ def assert_forest_polys_match(matrix, marked, num_trees):
     assert actual == expected
 
 
-GLOBAL_NUM_VERTICES = pytest.mark.xfail(
-    strict=True,
-    reason='_spanning_forest_polynomials uses the global num_vertices (5) instead of '
-    'self.num_vertices, which drops every forest on graphs with fewer vertices',
+@pytest.mark.parametrize(
+    'name, marked, num_trees',
+    [(name, marked, k) for name, marked in CASES for k in range(1, len(marked) + 1)],
 )
-
-
-def forest_params():
-    for name, marked in CASES:
-        for k in range(2, len(marked) + 1):
-            marks = GLOBAL_NUM_VERTICES if len(GRAPHS[name]) < 5 else ()
-            yield pytest.param(name, marked, k, marks=marks)
-
-
-@pytest.mark.parametrize('name, marked, num_trees', list(forest_params()))
 def test_forest_polys_match_brute_force(name, marked, num_trees):
     assert_forest_polys_match(GRAPHS[name], marked, num_trees)
 

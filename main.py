@@ -56,7 +56,6 @@ HOUSE += HOUSE.transpose()
 HOUSE = HOUSE.array
 
 MATRIX = get_kn(5)
-NUM_PARTITIONS = 2
 
 VER_5 = [0, 1, 2]
 VERT = [0, 1, 2, 3]
@@ -231,16 +230,6 @@ class Solver:
             part_patterns[pattern].append(p)
             forest_patterns[pattern].append(forest)
 
-        # print('\n====================================\n')
-        # print('\n====================================\n')
-
-        patterns = list(part_patterns.keys())
-        for pattern in patterns:
-            if len(set(pattern)) < NUM_PARTITIONS:
-                del part_patterns[pattern]
-                del forest_patterns[pattern]
-                continue
-
         return part_patterns, forest_patterns
 
     def _get_spanning_forests(self, forest_patterns):
@@ -265,7 +254,7 @@ class Solver:
         return spanning_forests
 
     def _spanning_forest_polynomials(self, spanning_forests, num_partitions):
-        num_forest_edges = num_vertices - 1 - (num_partitions - 1)
+        num_forest_edges = self.num_vertices - 1 - (num_partitions - 1)
         spfs = dict()
         for p in spanning_forests.keys():
             datas = spanning_forests[p]
@@ -549,42 +538,59 @@ class Solver:
         equations = self.get_equations(polynomial)
         soln = self.solve_system(equations, a_vars)
 
-        forbidden = []
-        free = []
-        dependent = []
-        for s in soln:
-            for i, j in zip(a_vars, s):
-                if i in zero_vars or isinstance(j, sym.core.numbers.Zero):
-                    forbidden.append(i)
-                if isinstance(j, sym.core.add.Add) or isinstance(j, sym.core.mul.Mul):
-                    dependent.append((i, j))
-                    print(f'Depd: {i} = {j}')
-                if i not in zero_vars and isinstance(j, sym.core.symbol.Symbol):
-                    free.append(i)
-                    print(f'Free: {i} = {j}')
+        # linsolve returns either EmptySet or a FiniteSet with one parametric solution
+        if not soln.args:
+            print('\n====================================\n')
+            print('No Solution')
+            return None
+        values = {
+            var: 0 if var in zero_vars else value for var, value in zip(a_vars, soln.args[0].args)
+        }
+
+        classes = self.classify_solution(values)
+        for var, value in classes['dependent']:
+            print(f'Depd: {var} = {value}')
+        for var, value in classes['fixed']:
+            print(f'Fixd: {var} = {value}')
+        for var, value in classes['free']:
+            print(f'Free: {var} = {value}')
 
         print('\n====================================\n')
         print(f'Num vars : {len(a_vars)}')
-        print(f'Dependent: {len(dependent)}')
-        print(f'Dimension: {len(free)}')
-        print(f'Forbidden: {len(forbidden)}')
+        print(f'Dependent: {len(classes["dependent"])}')
+        print(f'Fixed    : {len(classes["fixed"])}')
+        print(f'Dimension: {len(classes["free"])}')
+        print(f'Forbidden: {len(classes["forbidden"])}')
 
         print('\n====================================\n')
-        # linsolve returns either EmptySet or a FiniteSet with one parametric solution
-        if not soln.args:
-            print('No Solution')
-            return None
-        soln = soln.args[0].args
-        print(soln)
+        print(tuple(values.values()))
 
         # Map each (P_k, Q_k) pattern pair to its coefficient a(i,j) in
         # phi_P * phi_Q = sum of a(i,j) * phi_P_k * phi_Q_k
-        values = dict(zip(a_vars, soln))
-        solution = dict()
-        for pair, coords in var_map.items():
-            var = a_vars[reverse_variables[coords]]
-            solution[pair] = 0 if var in zero_vars else values[var]
-        return solution
+        return {pair: values[a_vars[reverse_variables[coords]]] for pair, coords in var_map.items()}
+
+    @staticmethod
+    def classify_solution(values):
+        """
+        Sorts the coefficients of a solution into exactly one of:
+            forbidden: always 0
+            free:      a parameter of the solution family
+            fixed:     a nonzero constant
+            dependent: determined by the free parameters
+        """
+        classes = {'forbidden': [], 'free': [], 'fixed': [], 'dependent': []}
+        for key, value in values.items():
+            value = sym.sympify(value)
+            if value == 0:
+                kind = 'forbidden'
+            elif value.is_Symbol:
+                kind = 'free'
+            elif not value.free_symbols:
+                kind = 'fixed'
+            else:
+                kind = 'dependent'
+            classes[kind].append((key, value))
+        return classes
 
     def expand_poly(self, poly, variables, zeros):
         new_coeffs = dict()
