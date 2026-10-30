@@ -74,10 +74,10 @@ Four-vertex search ($P$ = `1111`, $Q$ = `1234`) on $K_n$, on a Mac, with the def
 
 | Graph | Spanning trees | Build | Search | Verify | Peak memory |
 |---|---|---|---|---|---|
-| $K_5$ | 125 | < 0.01 s | 0.31 s | 0.13 s | 84 MB |
-| $K_6$ | 1,296 | 0.01 s | 0.35 s | 0.24 s | 89 MB |
-| $K_7$ | 16,807 | 0.10 s | 0.66 s | 1.7 s | 162 MB |
-| $K_8$ | 262,144 | 1.9 s | 6.5 s | 2.3 min | 3.8 GB |
+| $K_5$ | 125 | < 0.01 s | 0.29 s | 0.13 s | 85 MB |
+| $K_6$ | 1,296 | 0.01 s | 0.35 s | 0.23 s | 90 MB |
+| $K_7$ | 16,807 | 0.09 s | 0.52 s | 1.5 s | 152 MB |
+| $K_8$ | 262,144 | 1.8 s | 3.2 s | 2.3 min | 3.7 GB |
 
 Verification multiplies every pair of terms (3.6 billion on $K_8$). Its cost across versions:
 
@@ -85,11 +85,11 @@ Verification multiplies every pair of terms (3.6 billion on $K_8$). Its cost acr
 |---|---|---|---|---|
 | Pure Python | 6.9 s | 1.1 GB | stopped at 16 GB | > 16 GB |
 | Pure Python, chunked (`chunk_edges=6`) | 5.9 s | 201 MB | 19 min | 13.6 GB |
-| NumPy, chunked (`chunk_edges=8`) | 1.7 s | 162 MB | 2.3 min | 3.8 GB |
+| NumPy, chunked (`chunk_edges=8`) | 1.5 s | 152 MB | 2.3 min | 3.7 GB |
 
 Before chunking, verification held a sparse row for every distinct product monomial. Extrapolating from $K_6$ and $K_7$ (about 0.3–0.45 µs per term pair and 500 bytes per monomial), $K_8$ would have needed about 20 minutes and 75–80 GB. Chunking builds the equations for one group of monomials at a time, so the peak depends on the largest group. The NumPy version encodes monomials so that a product is a sum of keys, reduces each column of a group to distinct monomials before combining them, and keeps the rows sparse until duplicates are removed.
 
-The search evaluates the polynomials at all random points at once, modulo a few primes, and recovers the exact values with the Chinese remainder theorem. On $K_8$ this took the search from 11.7 s to 6.5 s.
+The search evaluates the polynomials at all random points at once, modulo a few primes, and recovers the exact values with the Chinese remainder theorem. Spanning trees and forests are stored as bitmasks of their edges, so all trees minus a choice of edges are computed at once with NumPy, and forest polynomials are cached. Together these took the $K_8$ search from 11.7 s to 3.2 s.
 
 For comparison, the original version took about 8 s on the $K_6$ search and 40 s on $K_7$, with no separate verification.
 

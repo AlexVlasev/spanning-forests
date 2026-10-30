@@ -28,6 +28,24 @@ def test_forest_polys_match_brute_force(name, marked, num_trees):
     assert_forest_polys_match(GRAPHS[name], marked, num_trees)
 
 
+@pytest.mark.parametrize('name', GRAPHS)
+def test_numpy_and_python_forest_generation_agree(name):
+    graph = Graph(GRAPHS[name])
+    for k in range(1, 5):
+        assert set(graph._forests_numpy(k)) == graph._forests(k)
+
+
+def test_forest_polynomials_are_cached():
+    graph = Graph(GRAPHS['K5'])
+    first = graph.forest_polynomials([0, 1, 2], 2)
+    second = graph.forest_polynomials([0, 1, 2], 2)
+    assert all(first[p] is second[p] for p in first)
+
+    # Changing the returned dict does not change the cache
+    first.clear()
+    assert graph.forest_polynomials([0, 1, 2], 2) == second
+
+
 @pytest.mark.parametrize('name, marked', [('K5', [1, 2]), ('K5', [1, 3, 4]), ('PRISM', [5, 0, 3])])
 def test_forest_polys_with_arbitrary_marked_vertices(name, marked):
     for k in range(1, len(marked) + 1):
