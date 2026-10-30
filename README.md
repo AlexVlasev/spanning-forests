@@ -97,6 +97,25 @@ The search evaluates the polynomials at all random points at once, modulo a few 
 
 For comparison, the original version took about 8 s on the $K_6$ search and 40 s on $K_7$, with no separate verification.
 
+## Limitations
+
+### Of the code
+
+- **Shape of the identities.** Only identities $\Phi^P \Phi^Q = \sum c_{ij} \Phi^{P_i} \Phi^{Q_j}$ are searched, where all the $P_i$ have the same number of parts, and so do all the $Q_j$. The two choices of sizes are the default ($|P| + 1$ and $|Q| - 1$) and `balanced`. Other shapes, such as mixed sizes or products of three polynomials, would need changes to `IdentitySolver.problem`.
+- **At most 9 parts.** Patterns label parts with single digits, so partitions with more than 9 parts are rejected. This limits the number of parts, not the number of vertices.
+- **Simple graphs.** Graphs are 0/1 adjacency matrices: undirected, without multiple edges, loops or edge weights. A disconnected graph has no spanning trees, so all its forest polynomials are empty.
+- **The search is probabilistic.** The random points use a fixed seed, so results are reproducible, and a wrong result would need a vanishingly unlikely degenerate choice of points. Use `--verify` to prove a family symbolically.
+- **NumPy paths have size limits.** Generating forests with NumPy needs at most 64 edges, and verification at most 40 ($K_9$ has 36). Larger graphs fall back to much slower pure Python. Evaluation recovers values up to about $2^{490}$ from 16 primes, and raises an error beyond that.
+- **Single process.** Everything runs in one process and in memory. The final linear system is solved exactly over the rationals by `sympy.linsolve`, which is fine for tens of unknowns but slow for hundreds.
+
+### In practice
+
+The sizes involved grow combinatorially, both in the graph and in the number of marked vertices.
+
+- **Spanning trees.** All spanning trees are enumerated, and $K_n$ has $n^{n-2}$: 262,144 for $K_8$, 4.8 million for $K_9$ and 100 million for $K_{10}$. Forests are generated from the trees, so $K_9$ is roughly the largest complete graph within reach, while sparser graphs with more vertices can go further.
+- **Verification.** It multiplies every pair of terms. For four marked vertices on $K_n$ that is about $26.7 \, n^{2n-7}$ pairs: 22 million for $K_7$, 3.6 billion for $K_8$ and about 840 billion for $K_9$. At the $K_8$ rate, verifying on $K_9$ would take on the order of 9 hours.
+- **Unknowns.** For $m$ marked vertices, the number of partitions into $k$ parts is the Stirling number $S(m, k)$, and there is one unknown per pair $(P_i, Q_j)$. For $P = 1\ldots1$ and $Q = 12\ldots m$ with `balanced`, that is 9 unknowns for 3 vertices, 42 for 4, 625 for 5, 5,850 for 6 and 122,500 for 7. The search needs one random point per unknown, and the exact solve grows quickly with the number of unknowns, so 5 marked vertices is already slow and 6 or more would need a different solver, such as working modulo a prime. For 5 marked vertices on $K_6$, an earlier version of this code took about 2.9 hours and found a 320-dimensional family (320 free, 280 dependent and 25 forbidden coefficients). It has not been rerun with the current code.
+
 ## Project layout
 
 - `graph.py`: the `Graph` class, with its spanning trees, tree and graph polynomials, and spanning forest polynomials.
