@@ -1,10 +1,8 @@
 import math
 import itertools
-import numpy as np
 import sympy as sym
 
 from time import time
-from scipy.linalg import lu
 
 from polynomial import Polynomial
 from matrix import Matrix
@@ -203,39 +201,6 @@ class Solver:
         print(f'Poly: {poly}')
         poly.variables = self.edge_vars
 
-    def _convert_to_vector_form(self, variables, polynomials):
-        matrix = []
-        vector = []
-        # n = max(len(polynomials), len(variables))
-        n = len(variables)
-        for poly in polynomials:
-            matrix_row = [0 for _ in range(n)]
-            vector_elem = 0
-            print(poly)
-            for p, c in poly.coefficients.items():
-                if sum(p) == 0:
-                    vector_elem = c
-                    continue
-                for index, entry in enumerate(p):
-                    if entry != 0:
-                        matrix_row[index] = c
-            print(matrix_row)
-            print(vector_elem)
-            matrix.append(matrix_row)
-            vector.append(vector_elem)
-        return matrix, vector
-
-    def solve_matrix(self, matrix, vector):
-        m = np.array(matrix)
-        v = np.array(vector)
-        U = lu(m)[2]
-        basis_columns = {np.flatnonzero(U[i, :])[0] for i in range(U.shape[0])}
-        free_variables = set(range(U.shape[1])) - basis_columns
-        self.debug(f'Free variables in LU: {len(free_variables)}')
-        self.debug(f'Free variables in LU: {free_variables}')
-        # x = np.linalg.solve(m, v)
-        # print(x)
-
     def get_lhs(self, P, Q):
         self.debug(f'Getting {P} polynomial')
         phi_P = self.get_phi_P(P)
@@ -287,157 +252,51 @@ class Solver:
 
         return variables, reverse_variables, var_map
 
-    def expand_polynomials(self, phi_P, phi_Q, sfps_P, sfps_Q, variables, zeros):
-        self.debug(f'Expanding polynomial vars for identity')
-        phi_P = self.expand_poly(phi_P, variables, zeros)
-        phi_Q = self.expand_poly(phi_Q, variables, zeros)
+    def get_equations(self, phi_P, phi_Q, sfps_P, sfps_Q):
+        """
+        Builds the linear system for the a(i,j) in
 
-        self.debug('Partition patterns')
+            phi_P * phi_Q = sum of a(i,j) * phi_P_i * phi_Q_j
 
-        sfps_P = [(p, self.expand_poly(poly, variables, zeros)) for p, poly in sfps_P]
-        self.debug('\nP_k:\n')
-        for p, _ in sfps_P:
-            self.debug(p)
-
-        sfps_Q = [(p, self.expand_poly(poly, variables, zeros)) for p, poly in sfps_Q]
-        self.debug('\nQ_k:\n')
-        for p, _ in sfps_Q:
-            self.debug(p)
-
-        return phi_P, phi_Q, sfps_P, sfps_Q
-
-    def get_polynomial(self, phi_P, phi_Q, sfps_P, sfps_Q, variables, reverse_variables, var_map):
+        with one equation per edge monomial, saying that its coefficients on
+        both sides agree. Each equation is returned as a pair (row, constant)
+        where row holds the coefficient of each a(i,j), in the order of
+        get_abstract_vars, reduced by their gcd. Duplicates are dropped.
+        """
         self.debug(f'\nMultiplying P, Q polynomial pairs: {len(sfps_P) * len(sfps_Q) + 1}')
-        # Encodes phi_P * phi_Q = sum of a(i,j) * phi_P_k * phi_Q_k as
-        # -phi_P * phi_Q + sum of a(i,j) * phi_P_k * phi_Q_k = 0
-        polynomials = [-(phi_P * phi_Q)]
+        lhs = (phi_P * phi_Q).coefficients
+        products = [(p_poly * q_poly).coefficients for _, p_poly in sfps_P for _, q_poly in sfps_Q]
 
-        for p, p_poly in sfps_P:
-            for q, q_poly in sfps_Q:
-                var_coords = var_map[(p, q)]
-                index = reverse_variables[var_coords]
-
-                power = [0 for i in range(len(variables))]
-                power[index + self.num_edges] = 1
-                coeffs = {tuple(power): 1}
-
-                var_poly = Polynomial(variables, coeffs)
-                # print(p, q, var_coords, index, power, var_poly)
-
-                prod = p_poly * q_poly * var_poly
-                # print(prod)
-                polynomials.append(prod)
-
-        return sum(polynomials)
-
-    def simplify_polynomial(self, polynomial_to_simplify):
-        polynomial = polynomial_to_simplify.collect(self.num_edges)
-        self.debug(f'Simplified polynomial has {len(polynomial.coefficients.items())} terms')
-        # for power, coeff in simplified.coefficients.items():
-        #     print(f'{power}: {coeff}')
-
-        zero_vars = set()
-        for p, c in polynomial.coefficients.items():
-            if not isinstance(c, Polynomial):
+        monomials = set(lhs).union(*products)
+        self.debug(f'Removing duplicate equations from {len(monomials)} equations')
+        equations = set()
+        for monomial in monomials:
+            row = tuple(product.get(monomial, 0) for product in products)
+            constant = lhs.get(monomial, 0)
+            gcd = math.gcd(*row, constant)
+            if gcd == 0:
                 continue
-            # A monomial whose coefficient is a single a(i,j) forces it to be 0
-            if len(c.coefficients) == 1:
-                (power,) = c.coefficients
-                if any(power):
-                    zero_vars.add(c.variables[power.index(1)])
-
-        self.debug(f'Number of zero variables: {len(zero_vars)}')
-
-        self.debug(f'Simplifying polynomial further')
-        for var in zero_vars:
-            new_coefficients = {p: c.apply(var, 0) for p, c in polynomial.coefficients.items()}
-            polynomial = Polynomial(self.edge_vars, new_coefficients)
-
-            new_coefficients = dict()
-            for p, poly in polynomial.coefficients.items():
-                gs = set()
-                for pp, c in poly.coefficients.items():
-                    gs.add(c)
-                gcd = math.gcd(*gs)
-                new_poly = poly
-                if gcd > 1:
-                    new_poly_coeffs = {pp: int(c / gcd) for pp, c in poly.coefficients.items()}
-                    new_poly = Polynomial(poly.variables, new_poly_coeffs)
-                    # print(f'GCD found: {gcd}: {poly} -> {new_poly}')
-                new_coefficients[p] = new_poly
-
-            polynomial = Polynomial(self.edge_vars, new_coefficients)
-
-        return polynomial, zero_vars
-
-    def get_equations(self, polynomial):
-        self.debug(
-            f'Removing duplicate equations from {len(polynomial.coefficients.items())} equations'
-        )
-        equations = []
-
-        # terms = []
-        for p, c in polynomial.coefficients.items():
-            if c in equations:
-                continue
-            equations.append(c)
-            # print(c)
-            # terms.extend(str(c).split(' + '))
-
-        # terms = set(terms)
-        # self.debug(f'Found {len(terms)} terms: {terms}')
-
-        # for eq in equations:
-        #     print(f'{eq} = 0')
+            equations.add((tuple(c // gcd for c in row), constant // gcd))
 
         self.debug(f'Remaining equations: {len(equations)}')
-
         return equations
 
     def solve_system(self, equations, a_vars):
-        # self.debug('Computing LU decomposition')
-        # matrix, vector = self._convert_to_vector_form(a_vars, equations)
-        # print(matrix)
-        # print(vector)
-        # self.solve_matrix(matrix, vector)
-
-        self.debug(f'Extracting linear system')
-        xs = sym.symbols(f'x_:{len(a_vars)}')
-        rows = []
-        for poly in equations:
-            p = poly
-            for x, v in zip(xs, a_vars):
-                p = p.apply(v, x)
-            # Substituting every a(i,j) moves all terms onto the constant
-            # monomial, so the equation is the sum of the coefficients = 0
-            rows.append(sum(p.coefficients.values()))
-
         self.debug(f'Solving linear system')
-        # soln = sym.nonlinsolve(rows, xs)
-        soln = sym.linsolve(rows, xs)
-
-        return soln
+        xs = sym.symbols(f'x_:{len(a_vars)}')
+        # Sort to keep the parametrization of the solution reproducible
+        equations = sorted(equations)
+        A = sym.Matrix([row for row, _ in equations])
+        b = sym.Matrix([constant for _, constant in equations])
+        return sym.linsolve((A, b), xs)
 
     def solve_problem(self, P, Q, reduce=False):
         phi_P, phi_Q = self.get_lhs(P, Q)
         sfps_P, sfps_Q = self.get_rhs(P, Q, reduce=reduce)
-        variables, reverse_variables, var_map = self.get_abstract_vars(sfps_P, sfps_Q)
-
-        a_vars = variables
+        a_vars, reverse_variables, var_map = self.get_abstract_vars(sfps_P, sfps_Q)
         self.debug(f'We have {len(a_vars)} a_i,j variables')
 
-        variables = [*self.edge_vars, *variables]
-        zeros = [0 for _ in range(len(a_vars))]
-        phi_P, phi_Q, sfps_P, sfps_Q = self.expand_polynomials(
-            phi_P, phi_Q, sfps_P, sfps_Q, variables, zeros
-        )
-
-        polynomial = self.get_polynomial(
-            phi_P, phi_Q, sfps_P, sfps_Q, variables, reverse_variables, var_map
-        )
-        polynomial, zero_vars = self.simplify_polynomial(polynomial)
-
-        equations = self.get_equations(polynomial)
+        equations = self.get_equations(phi_P, phi_Q, sfps_P, sfps_Q)
         soln = self.solve_system(equations, a_vars)
 
         # linsolve returns either EmptySet or a FiniteSet with one parametric solution
@@ -445,9 +304,7 @@ class Solver:
             print('\n====================================\n')
             print('No Solution')
             return None
-        values = {
-            var: 0 if var in zero_vars else value for var, value in zip(a_vars, soln.args[0].args)
-        }
+        values = dict(zip(a_vars, soln.args[0].args))
 
         classes = self.classify_solution(values)
         for var, value in classes['dependent']:
@@ -493,13 +350,6 @@ class Solver:
                 kind = 'dependent'
             classes[kind].append((key, value))
         return classes
-
-    def expand_poly(self, poly, variables, zeros):
-        new_coeffs = dict()
-        for power, coeff in poly.coefficients.items():
-            new_power = [*power, *zeros]
-            new_coeffs[tuple(new_power)] = coeff
-        return Polynomial(variables, new_coeffs)
 
     def debug(self, expr):
         if self.debug_print:
