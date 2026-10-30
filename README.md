@@ -21,7 +21,7 @@ For a graph $G$ and a partition $P$ of some of its vertices (the marked vertices
 1. Enumerate the spanning trees of the graph directly. The search never includes an edge that would close a cycle and never excludes one that would disconnect the graph, so every branch ends in a tree.
 2. Get every spanning forest with $k$ trees by removing $k - 1$ edges from each tree. Group the forests by the partition they induce on the marked vertices.
 3. **Find** the identities by evaluating every polynomial exactly at random integer points. Each point gives one linear equation in the $a_{ij}$. Using a few more points than unknowns, `sympy.linsolve` returns the full solution family, with probability 1.
-4. **Verify** (optional) by expanding every product symbolically and checking that the whole solution family satisfies the exact linear system. Monomials without squares are stored as bitmasks, so the product of $a$ and $b$ is the key `(a | b, a & b)`.
+4. **Verify** (optional) by expanding every product symbolically and checking that the whole solution family satisfies the exact linear system. Monomials without squares are stored as bitmasks, so the product of $a$ and $b$ is the key `(a | b, a & b)`. With NumPy (up to 40 edges), a monomial is instead the integer $\sum_e \text{exponent}_e \cdot 3^e$, so the key of a product is the sum of the keys.
 
 ## Usage
 
@@ -70,16 +70,26 @@ One member (all free parameters set to 0) is in [tests/test_identities.py](tests
 
 ### Performance
 
-Four-vertex search ($P$ = `1111`, $Q$ = `1234`) on $K_n$, on a Mac. Peak memory is cumulative across the phases. The chunked columns use the default `chunk_edges=6` in `get_equations`.
+Four-vertex search ($P$ = `1111`, $Q$ = `1234`) on $K_n$, on a Mac, with the default settings (NumPy, `chunk_edges=8`). Peak memory is cumulative across the phases.
 
-| Graph | Spanning trees | Build | Search | Verify | Peak memory | Verify (chunked) | Peak memory (chunked) |
-|---|---|---|---|---|---|---|---|
-| $K_5$ | 125 | < 0.01 s | 0.29 s | 0.01 s | 66 MB | 0.02 s | 66 MB |
-| $K_6$ | 1,296 | 0.01 s | 0.37 s | 0.09 s | 81 MB | 0.11 s | 68 MB |
-| $K_7$ | 16,807 | 0.09 s | 0.96 s | 6.9 s | 1.1 GB | 5.9 s | 201 MB |
-| $K_8$ | 262,144 | 1.85 s | 11.7 s | stopped at 16 GB | > 16 GB | 19 min | 13.6 GB |
+| Graph | Spanning trees | Build | Search | Verify | Peak memory |
+|---|---|---|---|---|---|
+| $K_5$ | 125 | < 0.01 s | 0.31 s | 0.13 s | 84 MB |
+| $K_6$ | 1,296 | 0.01 s | 0.35 s | 0.24 s | 89 MB |
+| $K_7$ | 16,807 | 0.10 s | 0.66 s | 1.7 s | 162 MB |
+| $K_8$ | 262,144 | 1.9 s | 6.5 s | 2.3 min | 3.8 GB |
 
-Verification multiplies every pair of terms (3.6 billion on $K_8$), and before chunking it held a sparse row for every distinct product monomial. Extrapolating from $K_6$ and $K_7$ (about 0.3–0.45 µs per term pair and 500 bytes per monomial), $K_8$ verification would have needed about 20 minutes and 75–80 GB. Chunking builds the equations for one group of monomials at a time, which brings the peak down to the size of the largest group, while the time stays about the same.
+Verification multiplies every pair of terms (3.6 billion on $K_8$). Its cost across versions:
+
+| Version | $K_7$ verify | $K_7$ peak memory | $K_8$ verify | $K_8$ peak memory |
+|---|---|---|---|---|
+| Pure Python | 6.9 s | 1.1 GB | stopped at 16 GB | > 16 GB |
+| Pure Python, chunked (`chunk_edges=6`) | 5.9 s | 201 MB | 19 min | 13.6 GB |
+| NumPy, chunked (`chunk_edges=8`) | 1.7 s | 162 MB | 2.3 min | 3.8 GB |
+
+Before chunking, verification held a sparse row for every distinct product monomial. Extrapolating from $K_6$ and $K_7$ (about 0.3–0.45 µs per term pair and 500 bytes per monomial), $K_8$ would have needed about 20 minutes and 75–80 GB. Chunking builds the equations for one group of monomials at a time, so the peak depends on the largest group. The NumPy version encodes monomials so that a product is a sum of keys, reduces each column of a group to distinct monomials before combining them, and keeps the rows sparse until duplicates are removed.
+
+The search evaluates the polynomials at all random points at once, modulo a few primes, and recovers the exact values with the Chinese remainder theorem. On $K_8$ this took the search from 11.7 s to 6.5 s.
 
 For comparison, the original version took about 8 s on the $K_6$ search and 40 s on $K_7$, with no separate verification.
 
@@ -87,6 +97,6 @@ For comparison, the original version took about 8 s on the $K_6$ search and 40 s
 
 - `graph.py`: the `Graph` class, with its spanning trees, tree and graph polynomials, and spanning forest polynomials.
 - `identities.py`: the `IdentitySolver`, which searches for identities numerically and verifies them symbolically.
-- `main.py`: an example run.
+- `main.py`: the command line interface.
 - `polynomial.py`: a small multivariate polynomial class.
 - `tests/`: checks against brute-force forest enumeration, known identities, and the matrix-tree theorem.
