@@ -1,7 +1,7 @@
 """
 Searches for quadratic identities between spanning forest polynomials,
 
-    phi_P * phi_Q = sum of a(i,j) * phi_P_i * phi_Q_j
+    phi_P * phi_Q = sum of c(P_i, Q_j) * phi_P_i * phi_Q_j
 
 where P_i and Q_j range over all partitions of the marked vertices into a
 fixed number of parts. Identities are found from exact evaluations at random
@@ -30,71 +30,70 @@ while len(EVALUATION_PRIMES) < 16:
     EVALUATION_PRIMES.append(sym.prevprime(EVALUATION_PRIMES[-1]))
 
 
+class Problem:
+    """
+    The polynomials of a search for identities
+
+        phi_P * phi_Q = sum of c(P_i, Q_j) * phi_P_i * phi_Q_j
+
+    with the spanning forest polynomials of the P_i and Q_j in rhs_P and
+    rhs_Q, keyed by pattern. The unknowns c are ordered as in pairs.
+    """
+
+    def __init__(self, P, Q, phi_P, phi_Q, rhs_P, rhs_Q):
+        self.P = P
+        self.Q = Q
+        self.phi_P = phi_P
+        self.phi_Q = phi_Q
+        self.rhs_P = rhs_P
+        self.rhs_Q = rhs_Q
+        self.pairs = [(p, q) for p in rhs_P for q in rhs_Q]
+
+
 class IdentitySolver:
     def __init__(self, graph, marked, verbose=False):
         self.graph = graph
         self.marked = marked
         self.verbose = verbose
 
-    def get_lhs(self, P, Q):
-        self.debug(f'Getting {P} polynomial')
-        phi_P = self.graph.forest_polynomial(self.marked, P)
-        self.debug(f'Polynomial {P} has {len(phi_P.coefficients.items())} terms')
-
-        self.debug(f'Getting {Q} polynomial')
-        phi_Q = self.graph.forest_polynomial(self.marked, Q)
-        self.debug(f'Polynomial {Q} has {len(phi_Q.coefficients.items())} terms')
-
-        return phi_P, phi_Q
-
-    def get_rhs(self, P, Q, reduce=False):
-        p, q = len(set(P)), len(set(Q))
-        a, b = p + 1, q - 1
-        if reduce:
-            mod = (p + q) % 2
-            a = int((p + q - mod) / 2)
-            b = int((p + q + mod) / 2)
-
-        self.debug(f'Getting P_k polynomials. Partitions: {a}')
-        sfps_P = list(self.graph.forest_polynomials(self.marked, a).items())
-        self.debug(f'Found {len(sfps_P)} P_k polynomials')
-
-        self.debug(f'Getting Q_k polynomials. Partitions: {b}')
-        sfps_Q = list(self.graph.forest_polynomials(self.marked, b).items())
-        self.debug(f'Found {len(sfps_Q)} Q_k polynomials')
-
-        return sfps_P, sfps_Q
-
-    def get_abstract_vars(self, sfps_P, sfps_Q):
-        num_P = len(sfps_P)
-        num_Q = len(sfps_Q)
-
-        variables = []
-        reverse_variables = dict()
-        var_map = dict()
-
-        index = 0
-        for i in range(num_P):
-            p = sfps_P[i][0]
-            for j in range(num_Q):
-                q = sfps_Q[j][0]
-                variables.append(f'a({i},{j})')
-                reverse_variables[(i, j)] = index
-                var_map[(p, q)] = (i, j)
-                index += 1
-
-        return variables, reverse_variables, var_map
-
-    def get_equations(self, phi_P, phi_Q, sfps_P, sfps_Q, chunk_edges=8, use_numpy=True):
+    def problem(self, P, Q, reduce=False):
         """
-        Builds the linear system for the a(i,j) in
+        The Problem for P and Q, where by default the P_i have one part more
+        than P and the Q_j one part fewer than Q. With reduce=True, the
+        numbers of parts are balanced instead, with the P_i having the fewer.
+        """
+        p, q = len(set(P)), len(set(Q))
+        if reduce:
+            return self._problem(P, Q, (p + q) // 2, (p + q + 1) // 2)
+        return self._problem(P, Q, p + 1, q - 1)
 
-            phi_P * phi_Q = sum of a(i,j) * phi_P_i * phi_Q_j
+    def _problem(self, P, Q, parts_P, parts_Q):
+        phi_P = self.graph.forest_polynomial(self.marked, P)
+        phi_Q = self.graph.forest_polynomial(self.marked, Q)
+        self.debug(
+            f'Polynomials {P} and {Q} have {len(phi_P.coefficients)} and '
+            f'{len(phi_Q.coefficients)} terms'
+        )
+
+        rhs_P = self.graph.forest_polynomials(self.marked, parts_P)
+        rhs_Q = self.graph.forest_polynomials(self.marked, parts_Q)
+        self.debug(
+            f'Found {len(rhs_P)} P_i with {parts_P} parts and '
+            f'{len(rhs_Q)} Q_j with {parts_Q} parts'
+        )
+
+        return Problem(P, Q, phi_P, phi_Q, rhs_P, rhs_Q)
+
+    def get_equations(self, problem, chunk_edges=8, use_numpy=True):
+        """
+        Builds the linear system for the unknowns c(P_i, Q_j) of a Problem,
+
+            phi_P * phi_Q = sum of c(P_i, Q_j) * phi_P_i * phi_Q_j
 
         with one equation per edge monomial, saying that its coefficients on
         both sides agree. Each equation is returned as a pair (row, constant)
-        where row holds the coefficient of each a(i,j), in the order of
-        get_abstract_vars, reduced by their gcd. Duplicates are dropped.
+        where row holds the coefficient of each unknown, in the order of
+        Problem.pairs, reduced by their gcd. Duplicates are dropped.
 
         To limit memory, monomials are processed in chunks according to which
         of the first chunk_edges edges they contain, and which of those are
@@ -107,14 +106,14 @@ class IdentitySolver:
         Graphs with up to MAX_NUMPY_EDGES edges multiply with numpy, unless
         use_numpy is False, and larger ones in pure Python.
         """
-        self.debug(f'\nMultiplying P, Q polynomial pairs: {len(sfps_P) * len(sfps_Q) + 1}')
+        self.debug(f'Multiplying {len(problem.pairs) + 1} pairs of polynomials')
         chunk_mask = (1 << min(chunk_edges, self.graph.num_edges)) - 1
         use_numpy = use_numpy and self.graph.num_edges <= MAX_NUMPY_EDGES
 
-        # Factor 0 is the left hand side, and factor k + 1 multiplies a(i,j) number k
-        masks_P = [_masks(poly) for _, poly in sfps_P]
-        masks_Q = [_masks(poly) for _, poly in sfps_Q]
-        factors = [(_masks(phi_P), _masks(phi_Q))]
+        # Factor 0 is the left hand side, and factor k + 1 multiplies unknown number k
+        masks_P = [_masks(poly) for poly in problem.rhs_P.values()]
+        masks_Q = [_masks(poly) for poly in problem.rhs_Q.values()]
+        factors = [(_masks(problem.phi_P), _masks(problem.phi_Q))]
         factors.extend(itertools.product(masks_P, masks_Q))
         if use_numpy:
             bucket = lambda terms: _bucket_arrays(terms, self.graph.num_edges, chunk_mask)
@@ -138,16 +137,11 @@ class IdentitySolver:
         self.debug(f'Remaining equations: {len(equations)}')
         return equations
 
-    def get_numeric_equations(
-        self, phi_P, phi_Q, sfps_P, sfps_Q, extra_points=10, seed=0, use_numpy=True
-    ):
+    def get_numeric_equations(self, problem, extra_points=10, seed=0, use_numpy=True):
         """
-        Builds a linear system for the a(i,j) in
-
-            phi_P * phi_Q = sum of a(i,j) * phi_P_i * phi_Q_j
-
-        by evaluating both sides exactly at random integer points, with one
-        equation per point, in the same (row, constant) form as get_equations.
+        Builds a linear system for the unknowns of a Problem by evaluating
+        both sides exactly at random integer points, with one equation per
+        point, in the same (row, constant) form as get_equations.
 
         Each point gives a random combination of the equations of
         get_equations, so with a few more points than unknowns both systems
@@ -158,7 +152,7 @@ class IdentitySolver:
         modulo a few primes, and the exact values recovered with the Chinese
         remainder theorem. Otherwise they are evaluated one point at a time.
         """
-        num_points = len(sfps_P) * len(sfps_Q) + extra_points
+        num_points = len(problem.pairs) + extra_points
         self.debug(f'Evaluating polynomials at {num_points} random points')
         rng = random.Random(seed)
         points = [
@@ -167,9 +161,9 @@ class IdentitySolver:
         ]
 
         evaluate = _evaluate_all_numpy if use_numpy else _evaluate_all
-        values_lhs = [evaluate(poly, points) for poly in (phi_P, phi_Q)]
-        values_P = [evaluate(poly, points) for _, poly in sfps_P]
-        values_Q = [evaluate(poly, points) for _, poly in sfps_Q]
+        values_lhs = [evaluate(poly, points) for poly in (problem.phi_P, problem.phi_Q)]
+        values_P = [evaluate(poly, points) for poly in problem.rhs_P.values()]
+        values_Q = [evaluate(poly, points) for poly in problem.rhs_Q.values()]
 
         equations = []
         for i in range(num_points):
@@ -178,20 +172,21 @@ class IdentitySolver:
             equations.append((row, constant))
         return equations
 
-    def verify_solution(self, solution, reduce=False):
+    def verify_solution(self, solution):
         """
         Confirms symbolically that every member of a solution family returned
         by solve_problem satisfies the identity, using the exact system of
         get_equations.
         """
-        phi_P, phi_Q = self.get_lhs(solution.P, solution.Q)
-        sfps_P, sfps_Q = self.get_rhs(solution.P, solution.Q, reduce=reduce)
-        return self._verify(phi_P, phi_Q, sfps_P, sfps_Q, solution)
+        # The numbers of parts of the P_i and Q_j, from any pair of patterns
+        p, q = next(iter(solution.coefficients))
+        problem = self._problem(solution.P, solution.Q, len(set(p)), len(set(q)))
+        return self._verify(problem, solution)
 
-    def _verify(self, phi_P, phi_Q, sfps_P, sfps_Q, solution):
+    def _verify(self, problem, solution):
         self.debug('Verifying solution symbolically')
-        coefficients = [solution.coefficients[(p, q)] for p, _ in sfps_P for q, _ in sfps_Q]
-        for row, constant in self.get_equations(phi_P, phi_Q, sfps_P, sfps_Q):
+        coefficients = [solution.coefficients[pair] for pair in problem.pairs]
+        for row, constant in self.get_equations(problem):
             lhs = sum((r * c for r, c in zip(row, coefficients) if r), sym.Integer(0))
             if sym.expand(lhs - constant) != 0:
                 return False
@@ -220,23 +215,17 @@ class IdentitySolver:
         With verify=True the family is also confirmed symbolically, which is
         much slower, and the result stored in Solution.verified.
         """
-        phi_P, phi_Q = self.get_lhs(P, Q)
-        sfps_P, sfps_Q = self.get_rhs(P, Q, reduce=reduce)
-        a_vars, reverse_variables, var_map = self.get_abstract_vars(sfps_P, sfps_Q)
-        self.debug(f'We have {len(a_vars)} a_i,j variables')
+        problem = self.problem(P, Q, reduce)
+        self.debug(f'Solving for {len(problem.pairs)} unknowns')
 
-        equations = self.get_numeric_equations(phi_P, phi_Q, sfps_P, sfps_Q)
-        values = self.solve_system(equations, len(a_vars))
+        values = self.solve_system(self.get_numeric_equations(problem), len(problem.pairs))
         if values is None:
             return None
 
-        coefficients = {
-            pair: values[reverse_variables[coords]] for pair, coords in var_map.items()
-        }
-        solution = Solution(P, Q, coefficients)
+        solution = Solution(P, Q, dict(zip(problem.pairs, values)))
         if verify:
             # Can only fail if the random points were degenerate
-            solution.verified = self._verify(phi_P, phi_Q, sfps_P, sfps_Q, solution)
+            solution.verified = self._verify(problem, solution)
         return solution
 
     def debug(self, expr):
@@ -247,7 +236,7 @@ class IdentitySolver:
 def _chunk_equations(buckets, pairs):
     """
     The equations of get_equations for the monomials in one chunk, with
-    sparse rows of (index of a(i,j), coefficient) pairs.
+    sparse rows of (index of the unknown, coefficient) pairs.
     """
     products = []
     for buckets_a, buckets_b in buckets:
@@ -339,7 +328,7 @@ def _chunk_equations_numpy(buckets, pairs):
         return set()
 
     # Sparse rows, as runs of (column, coefficient) entries grouped by monomial,
-    # with the constant in column 0, and the coefficient of a(i,j) number k in
+    # with the constant in column 0, and the coefficient of unknown number k in
     # column k + 1. Columns were added in order, so a stable sort keeps them sorted
     _, inverse = np.unique(np.concatenate(keys), return_inverse=True)
     order = np.argsort(inverse.ravel(), kind='stable')

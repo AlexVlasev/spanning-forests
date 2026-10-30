@@ -43,7 +43,8 @@ def parse_vertices(spec):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
-        description='Search for identities phi_P * phi_Q = sum of a(i,j) * phi_P_i * phi_Q_j '
+        description='Search for identities '
+        'phi_P * phi_Q = sum of c(P_i, Q_j) * phi_P_i * phi_Q_j '
         'between spanning forest polynomials.',
         epilog='Partitions are patterns with one digit per marked vertex, e.g. 1213.',
     )
