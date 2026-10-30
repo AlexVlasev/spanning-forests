@@ -1,8 +1,7 @@
 import pytest
+import sympy
 
 from helpers import GRAPHS, adjacency, edge_list, get_kn, make_solver, monomials, spanning_forests
-from matrix import Matrix
-from polynomial import Polynomial
 
 
 @pytest.mark.parametrize('n', [3, 4, 5, 6])
@@ -30,27 +29,24 @@ def matrix_tree_graph_poly(matrix):
     where E is the incidence matrix with one row removed.
     """
     edges = edge_list(matrix)
-    variables = [f'e{k}' for k in range(len(edges))]
-    incidence = [[0 for _ in edges] for _ in range(len(matrix))]
+    variables = sympy.symbols(f'e:{len(edges)}')
+    incidence = sympy.zeros(len(matrix), len(edges))
     for k, (i, j) in enumerate(edges):
-        incidence[i][k] = 1
-        incidence[j][k] = -1
-    incidence.pop(-1)
+        incidence[i, k] = 1
+        incidence[j, k] = -1
+    incidence = incidence[:-1, :]
 
-    diag = [[0 for _ in edges] for _ in edges]
-    for k in range(len(edges)):
-        power = tuple(1 if m == k else 0 for m in range(len(edges)))
-        diag[k][k] = Polynomial(variables, {power: 1})
-
-    incidence_T = Matrix(incidence).transpose().array
-    return Matrix.expand_block(diag, incidence_T, (-Matrix(incidence)).array).det()
+    block = sympy.BlockMatrix(
+        [[sympy.diag(*variables), incidence.T], [-incidence, sympy.zeros(incidence.rows)]]
+    )
+    det = sympy.Matrix(block).det(method='berkowitz')
+    return sympy.Poly(det, *variables).as_dict()
 
 
 @pytest.mark.parametrize('name', ['K4', 'HOUSE'])
 def test_graph_poly_matches_matrix_tree_theorem(name):
     solver = make_solver(GRAPHS[name], [0])
-    expected = matrix_tree_graph_poly(GRAPHS[name])
-    assert solver.graph_poly.coefficients == expected.coefficients
+    assert solver.graph_poly.coefficients == matrix_tree_graph_poly(GRAPHS[name])
 
 
 def test_disconnected_graph_has_no_trees():

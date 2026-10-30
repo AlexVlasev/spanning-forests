@@ -5,19 +5,16 @@ import sympy as sym
 from time import time
 
 from polynomial import Polynomial
-from matrix import Matrix
 
 DEBUG = True
 
 """
 1. Define a graph, whether random or like the complete graph K_n
-2. Build out the edge laplacian for the complementa of spanning trees
-3. Compute the psi_G polynomial and invert to capture spanning trees instead
-4. Convert psi_G monomials into spanning trees
-5. For each spanning tree, find the resulting m-forest collections
-6. Combine all the collections from all spanning trees
-7. For each forest in the collection, compute the resulting partition and forest monomial
-8. Collect monomials by partition and add them to form the phi_G polynomials
+2. Enumerate the spanning trees, giving the tree polynomial and its reciprocal psi_G
+3. For each spanning tree, find the resulting m-forest collections
+4. Combine all the collections from all spanning trees
+5. For each forest in the collection, compute the resulting partition and forest monomial
+6. Collect monomials by partition and add them to form the phi_G polynomials
 """
 
 # 1. Define a graph, whether random or like K_n
@@ -33,25 +30,6 @@ def get_kn(n):
     kn = [[0 if i == j else 1 for j in range(n)] for i in range(n)]
     return kn
 
-
-# template = [
-#     [0, , , , ],
-#     [0, 0, , , ],
-#     [0, 0, 0, , ],
-#     [0, 0, 0, 0, ],
-#     [0, 0, 0, 0, 0],
-
-HOUSE = [
-    [0, 1, 0, 0, 1],
-    [0, 0, 1, 1, 1],
-    [0, 0, 0, 1, 0],
-    [0, 0, 0, 0, 1],
-    [0, 0, 0, 0, 0],
-]
-
-HOUSE = Matrix(HOUSE)
-HOUSE += HOUSE.transpose()
-HOUSE = HOUSE.array
 
 MATRIX = get_kn(5)
 
