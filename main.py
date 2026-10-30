@@ -12,7 +12,7 @@ from matrix import Matrix
 DEBUG = True
 
 """
-1. Define a graph, whether random or like K_n
+1. Define a graph, whether random or like the complete graph K_n
 2. Build out the edge laplacian for the complementa of spanning trees
 3. Compute the psi_G polynomial and invert to capture spanning trees instead
 4. Convert psi_G monomials into spanning trees
@@ -30,9 +30,11 @@ K3 = [
     [1, 1, 0],
 ]
 
+
 def get_kn(n):
     kn = [[0 if i == j else 1 for j in range(n)] for i in range(n)]
     return kn
+
 
 # template = [
 #     [0, , , , ],
@@ -72,6 +74,7 @@ VAR_ABC_N = [alphabet[i] for i in range(num_edges)]
 
 REPLACE_VARS = VAR_ABC_N
 
+
 class Solver:
     def __init__(self, matrix, display_vars=None):
         self.matrix = matrix
@@ -82,16 +85,16 @@ class Solver:
         self.edge_vars = []
         self.edge_vars_dict = dict()
 
-        self.mat        = None
+        self.mat = None
         self.graph_poly = None
-        self.tree_poly  = None
+        self.tree_poly = None
 
-        self.vertices          = None
+        self.vertices = None
         self.edge_visibilities = None
 
         self._initialize()
         self.debug_print = DEBUG
-    
+
     def _initialize(self):
         """
         Computes the graph polynomial and its reciprocal tree polynomial
@@ -102,7 +105,7 @@ class Solver:
 
         num_edges = 0
         for i in range(self.num_vertices):
-            for j in range(i+1, self.num_vertices):
+            for j in range(i + 1, self.num_vertices):
                 if self.matrix[i][j] == 0:
                     continue
 
@@ -120,14 +123,13 @@ class Solver:
         incidence.pop(-1)
         incidence_T = Matrix(incidence).transpose().array
 
-
         # Getting the Laplacian incidence matrix
         diag = [[0 for i in range(num_edges)] for j in range(num_edges)]
         for i, edge in enumerate(self.edge_vars):
             power = tuple((1 if j == i else 0 for j in range(num_edges)))
             diag[i][i] = Polynomial(self.edge_vars, {power: 1})
         self.mat = Matrix.expand_block(diag, incidence_T, (-Matrix(incidence)).array)
-    
+
         # Matrix tree theorem
         self.graph_poly = self.mat.det()
         self.graph_poly = Polynomial(self.edge_vars, self.graph_poly.coefficients)
@@ -136,11 +138,11 @@ class Solver:
         all_vars = tuple([1 for _ in range(self.num_edges)])
         nomial = Polynomial(self.edge_vars, {all_vars: 1})
         self.tree_poly = nomial * self.graph_poly.reciprocal()
-    
+
     def _get_vertices(self, edge):
         indices = edge.strip('e()').split(',')
         return list(map(int, indices))
-    
+
     def set_vertices(self, vertices):
         self.vertices = vertices
         self.edge_visibilities = dict()
@@ -151,7 +153,7 @@ class Solver:
                 if j in self.vertices:
                     visible.append(j)
             self.edge_visibilities[edge] = visible
-    
+
     def _get_forest_polys(self, num_partitions):
         forest_polys = []
         for edges in itertools.combinations(self.edge_vars, num_partitions - 1):
@@ -159,7 +161,7 @@ class Solver:
             for edge in edges:
                 poly = poly.apply(edge, 1)
             forest_polys.append(poly)
-        
+
         return forest_polys
 
     def _get_partition_data(self, forest_polys):
@@ -238,9 +240,9 @@ class Solver:
                 del part_patterns[pattern]
                 del forest_patterns[pattern]
                 continue
-        
+
         return part_patterns, forest_patterns
-    
+
     def _get_spanning_forests(self, forest_patterns):
         spanning_forests = dict()
         for p, forests in forest_patterns.items():
@@ -261,10 +263,9 @@ class Solver:
                 poly = Polynomial(self.edge_vars, coefficients)
                 spanning_forests[p].append((forest, poly))
         return spanning_forests
-    
-    
+
     def _spanning_forest_polynomials(self, spanning_forests, num_partitions):
-        num_forest_edges = num_vertices - 1 - (num_partitions-1)
+        num_forest_edges = num_vertices - 1 - (num_partitions - 1)
         spfs = dict()
         for p in spanning_forests.keys():
             datas = spanning_forests[p]
@@ -286,29 +287,31 @@ class Solver:
             # print(f'{p} : {poly}')
             spfs[p] = poly
         return spfs
-        
+
     def get_sfp_for(self, num_partitions):
         forest_polys = self._get_forest_polys(num_partitions)
         partitions, forests = self._get_partition_data(forest_polys)
-        part_patterns, forest_patterns = self._compute_forest_patterns(partitions, forests, num_partitions)
+        part_patterns, forest_patterns = self._compute_forest_patterns(
+            partitions, forests, num_partitions
+        )
         spanning_forests = self._get_spanning_forests(forest_patterns)
         polynomials = self._spanning_forest_polynomials(spanning_forests, num_partitions)
         return polynomials
-    
+
     def get_phi_P(self, P):
         assert len(P) == len(self.vertices)
         if set(P) == {'1'}:
             return self.tree_poly
-        
+
         length = len(set(P))
         sfps = self.get_sfp_for(length)
         return sfps.get(P, 0)
-    
+
     def print_poly(self, poly: Polynomial):
         poly.variables = self.display_vars
         print(f'Poly: {poly}')
         poly.variables = self.edge_vars
-    
+
     def _convert_to_vector_form(self, variables, polynomials):
         matrix = []
         vector = []
@@ -330,7 +333,7 @@ class Solver:
             matrix.append(matrix_row)
             vector.append(vector_elem)
         return matrix, vector
-    
+
     def solve_matrix(self, matrix, vector):
         m = np.array(matrix)
         v = np.array(vector)
@@ -341,7 +344,7 @@ class Solver:
         self.debug(f'Free variables in LU: {free_variables}')
         # x = np.linalg.solve(m, v)
         # print(x)
-    
+
     def get_lhs(self, P, Q):
         self.debug(f'Getting {P} polynomial')
         phi_P = self.get_phi_P(P)
@@ -354,14 +357,14 @@ class Solver:
         # self.print_poly(phi_Q)
 
         return phi_P, phi_Q
-    
+
     def get_rhs(self, P, Q, reduce=False):
         p, q = len(set(P)), len(set(Q))
         a, b = p + 1, q - 1
         if reduce:
             mod = (p + q) % 2
-            a = int((p + q - mod)/2)
-            b = int((p + q + mod)/2)
+            a = int((p + q - mod) / 2)
+            b = int((p + q + mod) / 2)
 
         self.debug(f'Getting P_k polynomials. Partitions: {a}')
         sfps_P = list(self.get_sfp_for(a).items())
@@ -372,7 +375,7 @@ class Solver:
         self.debug(f'Found {len(sfps_Q)} P_k polynomials')
 
         return sfps_P, sfps_Q
-    
+
     def get_abstract_vars(self, sfps_P, sfps_Q):
         num_P = len(sfps_P)
         num_Q = len(sfps_Q)
@@ -390,9 +393,9 @@ class Solver:
                 reverse_variables[(i, j)] = index
                 var_map[(p, q)] = (i, j)
                 index += 1
-        
+
         return variables, reverse_variables, var_map
-    
+
     def expand_polynomials(self, phi_P, phi_Q, sfps_P, sfps_Q, variables, zeros):
         self.debug(f'Expanding polynomial vars for identity')
         phi_P = self.expand_poly(phi_P, variables, zeros)
@@ -411,7 +414,7 @@ class Solver:
             self.debug(p)
 
         return phi_P, phi_Q, sfps_P, sfps_Q
-    
+
     def get_polynomial(self, phi_P, phi_Q, sfps_P, sfps_Q, variables, reverse_variables, var_map):
         self.debug(f'\nMultiplying P, Q polynomial pairs: {len(sfps_P) * len(sfps_Q) + 1}')
         polynomials = [phi_P * phi_Q]
@@ -433,7 +436,7 @@ class Solver:
                 polynomials.append(prod)
 
         return sum(polynomials)
-    
+
     def simplify_polynomial(self, polynomial_to_simplify):
         polynomial = polynomial_to_simplify.collect(self.num_edges)
         self.debug(f'Simplified polynomial has {len(polynomial.coefficients.items())} terms')
@@ -463,17 +466,19 @@ class Solver:
                 gcd = math.gcd(*gs)
                 new_poly = poly
                 if gcd > 1:
-                    new_poly_coeffs = {pp: int(c/gcd) for pp, c in poly.coefficients.items()}
+                    new_poly_coeffs = {pp: int(c / gcd) for pp, c in poly.coefficients.items()}
                     new_poly = Polynomial(poly.variables, new_poly_coeffs)
                     # print(f'GCD found: {gcd}: {poly} -> {new_poly}')
                 new_coefficients[p] = new_poly
 
             polynomial = Polynomial(self.edge_vars, new_coefficients)
-        
+
         return polynomial, zero_vars
-    
+
     def get_equations(self, polynomial):
-        self.debug(f'Removing duplicate equations from {len(polynomial.coefficients.items())} equations')
+        self.debug(
+            f'Removing duplicate equations from {len(polynomial.coefficients.items())} equations'
+        )
         equations = []
 
         # terms = []
@@ -483,10 +488,10 @@ class Solver:
             equations.append(c)
             # print(c)
             # terms.extend(str(c).split(' + '))
-        
+
         # terms = set(terms)
         # self.debug(f'Found {len(terms)} terms: {terms}')
-        
+
         # for eq in equations:
         #     print(f'{eq} = 0')
 
@@ -517,7 +522,6 @@ class Solver:
                 eqns.append(expr[1][1])
                 vec.append(expr[0][1])
 
-        
         self.debug(f'Solving linear system')
         rows = [e - v for e, v in zip(eqns, vec)]
         # soln = sym.nonlinsolve(rows, xs)
@@ -526,7 +530,7 @@ class Solver:
         return soln
 
     def solve_problem(self, P, Q, reduce=False):
-        phi_P , phi_Q  = self.get_lhs(P, Q)
+        phi_P, phi_Q = self.get_lhs(P, Q)
         sfps_P, sfps_Q = self.get_rhs(P, Q, reduce=reduce)
         variables, reverse_variables, var_map = self.get_abstract_vars(sfps_P, sfps_Q)
 
@@ -535,9 +539,13 @@ class Solver:
 
         variables = [*self.edge_vars, *variables]
         zeros = [0 for _ in range(len(variables))]
-        phi_P, phi_Q, sfps_P, sfps_Q = self.expand_polynomials(phi_P, phi_Q, sfps_P, sfps_Q, variables, zeros)
+        phi_P, phi_Q, sfps_P, sfps_Q = self.expand_polynomials(
+            phi_P, phi_Q, sfps_P, sfps_Q, variables, zeros
+        )
 
-        polynomial = self.get_polynomial(phi_P, phi_Q, sfps_P, sfps_Q, variables, reverse_variables, var_map)
+        polynomial = self.get_polynomial(
+            phi_P, phi_Q, sfps_P, sfps_Q, variables, reverse_variables, var_map
+        )
         polynomial, zero_vars = self.simplify_polynomial(polynomial)
 
         equations = self.get_equations(polynomial)
@@ -557,7 +565,6 @@ class Solver:
                     free.append(i)
                     print(f'Free: {i} = {j}')
 
-        
         print('\n====================================\n')
         print(f'Num vars : {len(a_vars)}')
         print(f'Dependent: {len(dependent)}')
@@ -577,10 +584,11 @@ class Solver:
             new_power = [*power, *zeros]
             new_coeffs[tuple(new_power)] = coeff
         return Polynomial(variables, new_coeffs)
-    
+
     def debug(self, expr):
         if self.debug_print:
             print(expr)
+
 
 start = time()
 

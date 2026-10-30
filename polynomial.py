@@ -1,10 +1,11 @@
 from math import sqrt
 
+
 class Polynomial:
     def __init__(self, variables, coefficients):
         self.variables = variables if variables else []
         self.coefficients = coefficients if coefficients else dict()
-    
+
     def reciprocal(self):
         coefficients = dict()
         for power, coeff in self.coefficients.items():
@@ -14,7 +15,7 @@ class Polynomial:
     def __neg__(self):
         coefficients = {p: -c for p, c in self.coefficients.items()}
         return Polynomial(self.variables, coefficients)
-    
+
     def __add__(self, other):
         if isinstance(other, float) or isinstance(other, int):
             coefficients = {p: c for p, c in self.coefficients.items()}
@@ -35,18 +36,18 @@ class Polynomial:
             if value == 0:
                 continue
             coefficients[p] = value
-        
+
         return Polynomial(self.variables, coefficients)
-    
+
     def __radd__(self, other):
         return self + other
-    
+
     def __rmul__(self, other):
         return self * other
-    
+
     def __sub__(self, other):
         return self + (-other)
-    
+
     def __mul__(self, other):
         if isinstance(other, int) or isinstance(other, float):
             return Polynomial(self.variables, {p: c * other for p, c in self.coefficients.items()})
@@ -54,7 +55,7 @@ class Polynomial:
             raise Exception(f'Not a polynomial: {type(other)}')
         if self.variables != other.variables:
             raise Exception('Not implemented yet')
-        
+
         new_coefficients = dict()
         for p, c in self.coefficients.items():
             for q, d in other.coefficients.items():
@@ -62,9 +63,9 @@ class Polynomial:
                 if r not in new_coefficients:
                     new_coefficients[r] = 0
                 new_coefficients[r] += c * d
-        
+
         return Polynomial(self.variables, new_coefficients)
-    
+
     def __eq__(self, other):
         if isinstance(other, int) or isinstance(other, float):
             return not self.coefficients
@@ -72,7 +73,7 @@ class Polynomial:
             raise Exception(f'Not a polynomial: {type(other)}')
         if self.variables != other.variables:
             raise Exception('Not implemented yet')
-        
+
         ps = set(self.coefficients.keys())
         other_ps = set(other.coefficients.keys())
         if ps != other_ps:
@@ -82,7 +83,6 @@ class Polynomial:
                 return False
         return True
 
-    
     def __repr__(self):
         # parts = [
         #     'Polynomial(',
@@ -92,7 +92,7 @@ class Polynomial:
         # ]
         # return ''.join(parts)
         return str(self)
-    
+
     def __monomial(self, power):
         elements = []
         for p, x in zip(power, self.variables):
@@ -105,9 +105,9 @@ class Polynomial:
             if superscript.startswith('-'):
                 superscript = f'({superscript})'
             elements.append(f'{x}^{superscript}')
-        
+
         return ''.join(sorted(elements))
-    
+
     def __str__(self):
         terms = []
         items = sorted(self.coefficients.items(), key=lambda x: x[0])
@@ -136,7 +136,7 @@ class Polynomial:
         if not expr:
             return '0'
         return expr
-    
+
     def apply(self, variable, value):
         index = -1
         for i, var in enumerate(self.variables):
@@ -156,9 +156,9 @@ class Polynomial:
             if power not in coefficients:
                 coefficients[power] = 0
             coefficients[power] += c * value ** p[index]
-        
+
         return Polynomial(self.variables, coefficients)
-    
+
     def collect(self, vars_to_keep):
         new_vars = self.variables[:vars_to_keep]
         rest_vars = self.variables[vars_to_keep:]
@@ -171,7 +171,7 @@ class Polynomial:
             poly = Polynomial(rest_vars, {rest_power: coeff})
             coefficients[new_power] = coefficients[new_power] + poly
         return Polynomial(new_vars, coefficients)
-    
+
     def truncate(self, variable, power):
         index = -1
         for i, var in enumerate(self.variables):
@@ -180,13 +180,13 @@ class Polynomial:
                 break
         if index < 0:
             raise Exception(f'Variable "{variable}" is not one of the variables of the polynomial')
-        
+
         coefficients = dict()
         for p, value in self.coefficients.items():
             if p[index] >= power:
                 continue
             coefficients[p] = value
-        
+
         return Polynomial(self.variables, coefficients)
 
 
@@ -199,7 +199,7 @@ if __name__ == '__main__':
 
     # Pc = P.collect(1)
     # print(Pc)
-    
+
     # N = 7
     # variables = ['u']
     # u = Polynomial(variables, {(1,0): 1})
@@ -207,33 +207,30 @@ if __name__ == '__main__':
     # for i in range(N):
     #     y = (u + y*y).truncate('u', i+1)
     #     print(y)
-    
-
-
 
     N = 16
     variables = ['x']
-    u = Polynomial(variables, {(2,0): 0.5})
+    u = Polynomial(variables, {(2, 0): 0.5})
     y = u
     for i in range(N):
-        y = (u + y*y).truncate('x', 2*i)
+        y = (u + y * y).truncate('x', 2 * i)
         # print(y)
-    
+
     coefficients = dict()
     for p, value in y.coefficients.items():
-        coefficients[p] = value/(p[0]+1)
+        coefficients[p] = value / (p[0] + 1)
     integral = Polynomial(variables, coefficients) * Polynomial(variables, {(1,): 1})
     print(integral.apply('x', 1))
 
     variables = ['x']
-    u = Polynomial(variables, {(2,0): 1})
+    u = Polynomial(variables, {(2, 0): 1})
     y = u
     for i in range(N):
-        y = (u + y*y).truncate('x', 2*i)
+        y = (u + y * y).truncate('x', 2 * i)
         # print(y)
-    
+
     coefficients = dict()
     for p, value in y.coefficients.items():
-        coefficients[p] = value/(p[0]+1)
+        coefficients[p] = value / (p[0] + 1)
     integral = Polynomial(variables, coefficients) * Polynomial(variables, {(1,): 1})
-    print(integral.apply('x', 1/sqrt(2))*sqrt(2))
+    print(integral.apply('x', 1 / sqrt(2)) * sqrt(2))
