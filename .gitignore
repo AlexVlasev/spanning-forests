@@ -1,2 +1,7 @@
-.vscode/
+# Folders
+
 __pycache__/
+
+# Files
+
+todo.md
