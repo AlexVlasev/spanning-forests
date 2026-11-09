@@ -40,6 +40,11 @@ def test_main_with_custom_graph_and_marked_vertices(capsys):
     assert 'Dimension:' in capsys.readouterr().out
 
 
+def test_main_with_exact_solver(capsys):
+    assert main(['111', '123', '--graph', 'K5', '--balanced', '--exact-solver', '-q']) == 0
+    assert 'Dimension: 3' in capsys.readouterr().out
+
+
 @pytest.mark.parametrize(
     'args',
     [

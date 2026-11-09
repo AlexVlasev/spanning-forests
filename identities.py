@@ -15,6 +15,7 @@ import sympy as sym
 
 from equations import exact_equations
 from evaluation import numeric_equations
+from modular import solve_modular
 from solution import Solution
 
 logger = logging.getLogger(__name__)
@@ -108,13 +109,18 @@ class IdentitySolver:
                 return False
         return True
 
-    def solve_system(self, equations, num_vars):
+    def solve_system(self, equations, num_vars, modular=True):
         """
         The general solution of a linear system of (row, constant) equations,
         as a tuple of sympy expressions in free parameters x_0, x_1, ..., or
-        None if there is no solution.
+        None if there is no solution. Solved modulo primes (see modular.py),
+        or with modular=False over the rationals by sympy.linsolve, which
+        gives the same result but is much slower.
         """
         logger.info('Solving linear system')
+        if modular:
+            return solve_modular(equations, num_vars)
+
         xs = sym.symbols(f'x_:{num_vars}')
         # Sort to keep the parametrization of the solution reproducible
         equations = sorted(equations)
@@ -124,17 +130,19 @@ class IdentitySolver:
         # linsolve returns either EmptySet or a FiniteSet with one parametric solution
         return solutions.args[0].args if solutions.args else None
 
-    def solve_problem(self, P, Q, balanced=False, verify=False):
+    def solve_problem(self, P, Q, balanced=False, verify=False, modular=True):
         """
         Finds the family of identities phi_P * phi_Q = sum of c * phi_P_i * phi_Q_j
         from random evaluations, as a Solution, or None if there is none.
         With verify=True the family is also confirmed symbolically, which is
-        much slower, and the result stored in Solution.verified.
+        much slower, and the result stored in Solution.verified. See
+        solve_system for modular.
         """
         problem = self.problem(P, Q, balanced)
         logger.info(f'Solving for {len(problem.pairs)} unknowns')
 
-        values = self.solve_system(self.get_numeric_equations(problem), len(problem.pairs))
+        equations = self.get_numeric_equations(problem)
+        values = self.solve_system(equations, len(problem.pairs), modular)
         if values is None:
             return None
 

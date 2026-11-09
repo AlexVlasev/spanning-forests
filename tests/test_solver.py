@@ -1,5 +1,6 @@
 import logging
 import random
+from fractions import Fraction
 
 import numpy as np
 import pytest
@@ -7,7 +8,9 @@ import sympy
 
 from equations import _unique_runs
 from evaluation import crt, evaluate_all, evaluate_all_numpy
+from graph import complete_graph
 from helpers import GRAPHS, adjacency, assert_identity, make_solver
+from modular import rational_reconstruction, reduced_row_echelon, solve_modular
 from polynomial import MultilinearPolynomial
 from solution import Solution, classify
 
@@ -60,6 +63,70 @@ def test_numeric_and_symbolic_systems_agree(name, marked, P, Q, balanced, dimens
     numeric = solver.get_numeric_equations(problem)
     symbolic = solver.get_equations(problem)
     assert solver.solve_system(numeric, num_vars) == solver.solve_system(symbolic, num_vars)
+
+
+@pytest.mark.parametrize('name, marked, P, Q, balanced, dimension', CASES)
+def test_modular_and_exact_solvers_agree(name, marked, P, Q, balanced, dimension):
+    solver = make_solver(GRAPHS[name], marked)
+    problem = solver.problem(P, Q, balanced)
+    num_vars = len(problem.pairs)
+
+    for equations in (solver.get_numeric_equations(problem), solver.get_equations(problem)):
+        exact = solver.solve_system(equations, num_vars, modular=False)
+        assert solver.solve_system(equations, num_vars, modular=True) == exact
+
+
+@pytest.mark.parametrize('m', [3, 4, 5, 6])
+def test_dimension_for_any_number_of_marked_vertices(m):
+    # Theorem 3.4.1 of Fraser and Yeats
+    solver = make_solver(complete_graph(m + 1), list(range(m)))
+    P, Q = '1' * m, ''.join(str(i + 1) for i in range(m))
+    assert solver.solve_problem(P, Q).dimension == m * (m - 2)
+
+
+def test_modular_solver_with_no_solution():
+    assert solve_modular([((1, 2), 3), ((2, 4), 7)], 2) is None
+
+
+def test_modular_solver_with_free_parameters_and_fractions():
+    x = sympy.symbols('x_:3')
+    equations = [((2, 0, 1), 1), ((4, 0, 2), 2)]
+    assert solve_modular(equations, 3) == (sympy.Rational(1, 2) - x[2] / 2, x[1], x[2])
+
+
+def test_modular_solver_with_more_digits_than_one_prime():
+    numerator, denominator = 2**70 + 1, 3**30
+    solution = solve_modular([((denominator,), numerator)], 1)
+    assert solution == (sympy.Rational(numerator, denominator),)
+
+
+def test_modular_solver_discards_an_unlucky_prime():
+    # Modulo the first prime, the first equation disappears
+    p = 2**31 - 1
+    assert solve_modular([((p, 0), p), ((0, 1), 1)], 2) == (1, 1)
+    assert solve_modular([((p, 1), p + 1), ((0, 2), 2), ((p, 3), p + 3)], 2) == (1, 1)
+
+
+def test_modular_solver_with_no_equations():
+    assert solve_modular([], 2) == sympy.symbols('x_:2')
+
+
+def test_reduced_row_echelon():
+    matrix = np.array([[0, 2, 4], [0, 1, 2], [3, 0, 1]], dtype=np.int64)
+    reduced, pivots = reduced_row_echelon(matrix, 7)
+    assert pivots == (0, 1)
+    assert reduced.tolist() == [[1, 0, 5], [0, 1, 2]]
+
+
+@pytest.mark.parametrize('n, d', [(0, 1), (1, 1), (-1, 1), (3, 7), (-22, 41), (1000, 1001)])
+def test_rational_reconstruction(n, d):
+    modulus = 2**31 - 1
+    value = n * pow(d, -1, modulus) % modulus
+    assert rational_reconstruction(value, modulus) == Fraction(n, d)
+
+
+def test_rational_reconstruction_fails_without_enough_digits():
+    assert rational_reconstruction(5, 7) is None
 
 
 @pytest.mark.parametrize(

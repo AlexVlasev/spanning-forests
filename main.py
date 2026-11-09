@@ -70,6 +70,11 @@ def main(argv=None):
     parser.add_argument(
         '--verify', action='store_true', help='confirm the solution symbolically (slow)'
     )
+    parser.add_argument(
+        '--exact-solver',
+        action='store_true',
+        help='solve over the rationals with sympy instead of modulo primes (slow)',
+    )
     parser.add_argument('-q', '--quiet', action='store_true', help='hide progress messages')
     args = parser.parse_args(argv)
 
@@ -85,7 +90,13 @@ def main(argv=None):
 
     start = time()
     solver = IdentitySolver(Graph(args.graph), marked)
-    solution = solver.solve_problem(args.P, args.Q, balanced=args.balanced, verify=args.verify)
+    solution = solver.solve_problem(
+        args.P,
+        args.Q,
+        balanced=args.balanced,
+        verify=args.verify,
+        modular=not args.exact_solver,
+    )
 
     print('\n====================================\n')
     if solution is None:
