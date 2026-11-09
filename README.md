@@ -2,18 +2,18 @@
 
 Searches for quadratic identities between spanning forest polynomials of graphs, of the form
 
-$$\Phi^P \, \Phi^Q = \sum_{i,j} a_{ij} \, \Phi^{P_i} \, \Phi^{Q_j}$$
+$$\Phi^P \thinspace \Phi^Q = \sum_{i,j} a_{ij} \thinspace \Phi^{P_i} \thinspace \Phi^{Q_j}$$
 
 where $P$ and $Q$ are partitions of a set of marked vertices, and $P_i$, $Q_j$ range over all partitions of those vertices into a fixed number of parts.
 
-This is a Python port of the Mathematica code behind *A four-vertex, quadratic, spanning forest polynomial identity* (Vlasev and Yeats). That code found identities numerically. This version finds them numerically too, and then confirms them symbolically.
+This is a Python port of the Mathematica code behind (Vlasev and Yeats, 2012[^vlasev2012]). That code found identities numerically. This version finds them numerically too, and then confirms them symbolically.
 
 ## Background and conventions
 
 For a graph $G$ and a partition $P$ of some of its vertices (the marked vertices), the spanning forest polynomial $\Phi_G^P$ sums over spanning forests with one tree per part of $P$, where each tree contains exactly the marked vertices of its part.
 
 - **Monomials are the edges in the forest.** This is the reverse of Brown and Yeats, who use the edges not in the forest. With one part, $\Phi$ is the Kirchhoff (tree) polynomial, and $\psi_G$ is its reciprocal.
-- **Partitions are written as patterns**, one digit per marked vertex, numbering parts in order of first appearance. With marked vertices `[0, 1, 2, 3]`, the pattern `1213` means the partition $\{0, 2\}, \{1\}, \{3\}$. Patterns are sorted, which fixes the numbering of the $a_{ij}$.
+- **Partitions are written as patterns**, one digit per marked vertex, numbering parts in order of first appearance. With marked vertices `[0, 1, 2, 3]`, the pattern `1213` means the partition $\lbrace 0, 2\rbrace, \lbrace 1\rbrace, \lbrace 3\rbrace$. Patterns are sorted, which fixes the numbering of the $a_{ij}$.
 - **Partition sizes.** By default the $P_i$ have $|P| + 1$ parts and the $Q_j$ have $|Q| - 1$. With `balanced=True` they have $\lfloor (|P|+|Q|)/2 \rfloor$ and $\lceil (|P|+|Q|)/2 \rceil$ parts.
 
 ## How it works
@@ -58,7 +58,7 @@ print(solution.identity())
 
 The search finds a 3-dimensional family. One member is
 
-$$\Psi \, \Phi^{\{1\},\{2\},\{3\}} = \Phi^{\{1\},\{2,3\}} \Phi^{\{1,2\},\{3\}} + \Phi^{\{1\},\{2,3\}} \Phi^{\{1,3\},\{2\}} + \Phi^{\{1,2\},\{3\}} \Phi^{\{1,3\},\{2\}}$$
+$$\Psi \thinspace \Phi^{\lbrace 1\rbrace,\lbrace 2\rbrace,\lbrace 3\rbrace} = \Phi^{\lbrace 1\rbrace,\lbrace 2,3\rbrace} \Phi^{\lbrace 1,2\rbrace,\lbrace 3\rbrace} + \Phi^{\lbrace 1\rbrace,\lbrace 2,3\rbrace} \Phi^{\lbrace 1,3\rbrace,\lbrace 2\rbrace} + \Phi^{\lbrace 1,2\rbrace,\lbrace 3\rbrace} \Phi^{\lbrace 1,3\rbrace,\lbrace 2\rbrace}$$
 
 It holds on every graph tested: $K_4$, $K_5$, the house graph and the triangular prism.
 
@@ -71,6 +71,21 @@ For $P$ = `1111`, $Q$ = `1234` with `balanced=True`, there are 42 unknowns $a_{i
 | $K_5$, $K_6$, $K_7$, $K_8$, prism | 8 | 16 | 18 |
 
 One member (all free parameters set to 0) is in [tests/test_identities.py](tests/test_identities.py) as `FOUR_VERTEX_RHS`.
+
+### Five and six marked vertices
+
+For $P = 1\ldots1$ and $Q = 12\ldots m$ with the default partition sizes (two-part $P_i$ and $(m-1)$-part $Q_j$), the search on $K_7$ finds:
+
+| Marked vertices | Unknowns | Free | Dependent | Forbidden | Search time |
+|---|---|---|---|---|---|
+| 5 | 150 | 15 | 65 | 70 | 65 s |
+| 6 | 465 | 24 | 216 | 225 | 3.3 hours |
+
+These two runs were numerical only, without symbolic verification.
+
+### The general pattern
+
+The numbers of free parameters for 3, 4, 5 and 6 marked vertices are 3, 8, 15 and 24, which is $m(m-2)$ for $m$ marked vertices. This has been proved for identities of this form, with two-part and $(m-1)$-part partitions on the right-hand side (Fraser and Yeats, 2023[^fraser2023], Theorem 3.4.1).
 
 ### Performance
 
@@ -113,8 +128,8 @@ For comparison, the original version took about 8 s on the $K_6$ search and 40 s
 The sizes involved grow combinatorially, both in the graph and in the number of marked vertices.
 
 - **Spanning trees.** All spanning trees are enumerated, and $K_n$ has $n^{n-2}$: 262,144 for $K_8$, 4.8 million for $K_9$ and 100 million for $K_{10}$. Forests are generated from the trees, so $K_9$ is roughly the largest complete graph within reach, while sparser graphs with more vertices can go further.
-- **Verification.** It multiplies every pair of terms. For four marked vertices on $K_n$ that is about $26.7 \, n^{2n-7}$ pairs: 22 million for $K_7$, 3.6 billion for $K_8$ and about 840 billion for $K_9$. At the $K_8$ rate, verifying on $K_9$ would take on the order of 9 hours.
-- **Unknowns.** For $m$ marked vertices, the number of partitions into $k$ parts is the Stirling number $S(m, k)$, and there is one unknown per pair $(P_i, Q_j)$. For $P = 1\ldots1$ and $Q = 12\ldots m$ with `balanced`, that is 9 unknowns for 3 vertices, 42 for 4, 625 for 5, 5,850 for 6 and 122,500 for 7. The search needs one random point per unknown, and the exact solve grows quickly with the number of unknowns, so 5 marked vertices is already slow and 6 or more would need a different solver, such as working modulo a prime. For 5 marked vertices on $K_6$, an earlier version of this code took about 2.9 hours and found a 320-dimensional family (320 free, 280 dependent and 25 forbidden coefficients). It has not been rerun with the current code.
+- **Verification.** It multiplies every pair of terms. For four marked vertices on $K_n$ that is about $26.7 \thinspace n^{2n-7}$ pairs: 22 million for $K_7$, 3.6 billion for $K_8$ and about 840 billion for $K_9$. At the $K_8$ rate, verifying on $K_9$ would take on the order of 9 hours.
+- **Unknowns.** For $m$ marked vertices, the number of partitions into $k$ parts is the Stirling number $S(m, k)$, and there is one unknown per pair $(P_i, Q_j)$. For $P = 1\ldots1$ and $Q = 12\ldots m$ with the default partition sizes, that is 9 unknowns for 3 vertices, 42 for 4, 150 for 5, 465 for 6 and 1,323 for 7. With `balanced`, it is the same for 3 and 4, and then 625 for 5, 5,850 for 6 and 122,500 for 7. The search needs one random point per unknown, and the exact solve grows quickly with the number of unknowns. The search with 465 unknowns took about 3.3 hours, nearly all of it in the solve, so larger problems would need a different solver, such as working modulo a prime.
 
 ## Project layout
 
@@ -126,3 +141,11 @@ The sizes involved grow combinatorially, both in the graph and in the number of 
 - `main.py`: the command line interface.
 - `polynomial.py`: `MultilinearPolynomial`, which stores each monomial as a bitmask of its edges and is used for all spanning forest polynomials, and a general `Polynomial` class for display.
 - `tests/`: checks against brute-force forest enumeration, known identities, and the matrix-tree theorem.
+
+## References
+
+[^vlasev2012]: Vlasev, A., & Yeats, K. (2012). A four-vertex, quadratic, spanning forest polynomial identity. *Electronic Journal of Linear Algebra*, 23(1), 923-941. 
+  [![arXiv](https://img.shields.io/badge/arXiv-1106.2869-b31b1b.svg)](https://arxiv.org/abs/1106.2869) [![DOI](https://img.shields.io/badge/DOI-10.13001%2F1081--3810.1566-blue.svg)](https://doi.org/10.13001/1081-3810.1566)
+
+[^fraser2023]: Fraser, M., & Yeats, K. (2023). Column expansion identities and quadratic spanning forest identities. *Australasian Journal of Combinatorics*, 86, 271-307. 
+  [![arXiv](https://img.shields.io/badge/arXiv-2109.13401-b31b1b.svg)](https://arxiv.org/abs/2109.13401) [![AJC](https://img.shields.io/badge/AJC-86-blue.svg)](https://ajc.maths.uq.edu.au/v86.p271)
