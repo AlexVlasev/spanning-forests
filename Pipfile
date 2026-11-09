@@ -9,6 +9,8 @@ sympy = "*"
 
 [dev-packages]
 pytest = "*"
+pytest-cov = "*"
+pyright = "*"
 
 [requires]
 python_version = "3.13"

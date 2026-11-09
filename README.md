@@ -20,7 +20,7 @@ For a graph $G$ and a partition $P$ of some of its vertices (the marked vertices
 
 1. Enumerate the spanning trees of the graph directly. The search never includes an edge that would close a cycle and never excludes one that would disconnect the graph, so every branch ends in a tree.
 2. Get every spanning forest with $k$ trees by removing $k - 1$ edges from each tree. Group the forests by the partition they induce on the marked vertices.
-3. **Find** the identities by evaluating every polynomial exactly at random integer points. Each point gives one linear equation in the $a_{ij}$. Using a few more points than unknowns, `sympy.linsolve` returns the full solution family, with probability 1.
+3. **Find** the identities by evaluating every polynomial exactly at random integer points. Each point gives one linear equation in the $a_{ij}$. Using a few more points than unknowns, row reduction modulo primes gives the full solution family, with probability 1. Its rational coefficients are recovered with the Chinese remainder theorem and rational reconstruction, then checked exactly against the equations. `--exact-solver` (or `modular=False`) uses `sympy.linsolve` instead, which gives the same result much more slowly.
 4. **Verify** (optional) by expanding every product symbolically and checking that the whole solution family satisfies the exact linear system. Monomials without squares are stored as bitmasks, so the product of $a$ and $b$ is the key `(a | b, a & b)`. With NumPy (up to 40 edges), a monomial is instead the integer $\sum_e \text{exponent}_e \cdot 3^e$, so the key of a product is the sum of the keys.
 
 ## Usage
@@ -72,20 +72,21 @@ For $P$ = `1111`, $Q$ = `1234` with `balanced=True`, there are 42 unknowns $a_{i
 
 One member (all free parameters set to 0) is in [tests/test_identities.py](tests/test_identities.py) as `FOUR_VERTEX_RHS`.
 
-### Five and six marked vertices
+### Five, six and seven marked vertices
 
-For $P = 1\ldots1$ and $Q = 12\ldots m$ with the default partition sizes (two-part $P_i$ and $(m-1)$-part $Q_j$), the search on $K_7$ finds:
+For $P = 1\ldots1$ and $Q = 12\ldots m$ with the default partition sizes (two-part $P_i$ and $(m-1)$-part $Q_j$), the search finds:
 
-| Marked vertices | Unknowns | Free | Dependent | Forbidden | Search time |
-|---|---|---|---|---|---|
-| 5 | 150 | 15 | 65 | 70 | 65 s |
-| 6 | 465 | 24 | 216 | 225 | 3.3 hours |
+| Marked vertices | Graph | Unknowns | Free | Dependent | Forbidden | Time | Time with `--exact-solver` |
+|---|---|---|---|---|---|---|---|
+| 5 | $K_7$ | 150 | 15 | 65 | 70 | 0.34 s | 65 s |
+| 6 | $K_7$ | 465 | 24 | 216 | 225 | 1.5 s | 3.3 hours |
+| 7 | $K_8$ | 1,323 | 35 | 637 | 651 | 40 s | not run |
 
-These two runs were numerical only, without symbolic verification.
+These runs were numerical only, without symbolic verification.
 
 ### The general pattern
 
-The numbers of free parameters for 3, 4, 5 and 6 marked vertices are 3, 8, 15 and 24, which is $m(m-2)$ for $m$ marked vertices. This has been proved for identities of this form, with two-part and $(m-1)$-part partitions on the right-hand side (Fraser and Yeats, 2023[^fraser2023], Theorem 3.4.1).
+The numbers of free parameters for 3, 4, 5, 6 and 7 marked vertices are 3, 8, 15, 24 and 35, which is $m(m-2)$ for $m$ marked vertices. This has been proved for identities of this form, with two-part and $(m-1)$-part partitions on the right-hand side (Fraser and Yeats, 2023[^fraser2023], Theorem 3.4.1).
 
 ### Performance
 
@@ -121,7 +122,7 @@ For comparison, the original version took about 8 s on the $K_6$ search and 40 s
 - **Simple graphs.** Graphs are 0/1 adjacency matrices: undirected, without multiple edges, loops or edge weights. A disconnected graph has no spanning trees, so all its forest polynomials are empty.
 - **The search is probabilistic.** The random points use a fixed seed, so results are reproducible, and a wrong result would need a vanishingly unlikely degenerate choice of points. Use `--verify` to prove a family symbolically.
 - **NumPy paths have size limits.** Generating forests with NumPy needs at most 64 edges, and verification at most 40 ($K_9$ has 36). Larger graphs fall back to much slower pure Python. Evaluation recovers values up to about $2^{490}$ from 16 primes, and raises an error beyond that.
-- **Single process.** Everything runs in one process and in memory. The final linear system is solved exactly over the rationals by `sympy.linsolve`, which is fine for tens of unknowns but slow for hundreds.
+- **Single process.** Everything runs in one process and in memory. With `--exact-solver`, `sympy.linsolve` is fine for tens of unknowns but slow for hundreds.
 
 ### In practice
 
@@ -129,7 +130,7 @@ The sizes involved grow combinatorially, both in the graph and in the number of 
 
 - **Spanning trees.** All spanning trees are enumerated, and $K_n$ has $n^{n-2}$: 262,144 for $K_8$, 4.8 million for $K_9$ and 100 million for $K_{10}$. Forests are generated from the trees, so $K_9$ is roughly the largest complete graph within reach, while sparser graphs with more vertices can go further.
 - **Verification.** It multiplies every pair of terms. For four marked vertices on $K_n$ that is about $26.7 \thinspace n^{2n-7}$ pairs: 22 million for $K_7$, 3.6 billion for $K_8$ and about 840 billion for $K_9$. At the $K_8$ rate, verifying on $K_9$ would take on the order of 9 hours.
-- **Unknowns.** For $m$ marked vertices, the number of partitions into $k$ parts is the Stirling number $S(m, k)$, and there is one unknown per pair $(P_i, Q_j)$. For $P = 1\ldots1$ and $Q = 12\ldots m$ with the default partition sizes, that is 9 unknowns for 3 vertices, 42 for 4, 150 for 5, 465 for 6 and 1,323 for 7. With `balanced`, it is the same for 3 and 4, and then 625 for 5, 5,850 for 6 and 122,500 for 7. The search needs one random point per unknown, and the exact solve grows quickly with the number of unknowns. The search with 465 unknowns took about 3.3 hours, nearly all of it in the solve, so larger problems would need a different solver, such as working modulo a prime.
+- **Unknowns.** For $m$ marked vertices, the number of partitions into $k$ parts is the Stirling number $S(m, k)$, and there is one unknown per pair $(P_i, Q_j)$. For $P = 1\ldots1$ and $Q = 12\ldots m$ with the default partition sizes, that is 9 unknowns for 3 vertices, 42 for 4, 150 for 5, 465 for 6 and 1,323 for 7. With `balanced`, it is the same for 3 and 4, and then 625 for 5, 5,850 for 6 and 122,500 for 7. The search needs one random point per unknown. Row reduction modulo primes is dense, with memory quadratic and time cubic in the number of unknowns, so hundreds of thousands of unknowns are out of reach.
 
 ## Project layout
 
@@ -137,6 +138,7 @@ The sizes involved grow combinatorially, both in the graph and in the number of 
 - `identities.py`: the `IdentitySolver`, which searches for identities numerically and verifies them symbolically.
 - `evaluation.py`: the linear system from exact evaluations at random points, modulo a few primes, with the Chinese remainder theorem.
 - `equations.py`: the exact linear system from expanding every product, in chunks, with NumPy or pure Python.
+- `modular.py`: solves linear systems by row reduction modulo primes, recovering the exact rational solution.
 - `solution.py`: the `Solution` class for a family of identities, with its report.
 - `main.py`: the command line interface.
 - `polynomial.py`: `MultilinearPolynomial`, which stores each monomial as a bitmask of its edges and is used for all spanning forest polynomials, and a general `Polynomial` class for display.
