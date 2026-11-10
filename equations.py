@@ -10,15 +10,31 @@ any number of factors are handled by expansion_equations.
 
 import itertools
 import math
+from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+from aliases import Equation, IntArray, UIntArray
+from polynomial import MultilinearPolynomial
+
+if TYPE_CHECKING:
+    from identities import Problem
 
 # Monomial keys sum exponent * 3**e over edges e, and products of monomials
 # without squares have keys below 3**num_edges, which fits in a uint64 up to 40 edges
 MAX_NUMPY_EDGES = 40
 
+type KeyArrays = tuple[UIntArray, IntArray]
+type Terms = list[tuple[int, int]]
+type Buckets = dict[int, Terms]
+type ArrayBuckets = dict[int, KeyArrays]
+type SparseEquation = tuple[tuple[tuple[int, int], ...], int]
 
-def exact_equations(problem, num_edges, chunk_edges=8, use_numpy=True):
+
+def exact_equations(
+    problem: 'Problem', num_edges: int, chunk_edges: int = 8, use_numpy: bool = True
+) -> set[Equation]:
     """
     Builds the linear system for the unknowns c(P_i, Q_j) of a Problem, with
     one equation per edge monomial, saying that its coefficients on both
@@ -46,27 +62,33 @@ def exact_equations(problem, num_edges, chunk_edges=8, use_numpy=True):
     terms_Q = [list(poly.terms.items()) for poly in problem.rhs_Q.values()]
     factors = [(list(problem.phi_P.terms.items()), list(problem.phi_Q.terms.items()))]
     factors.extend(itertools.product(terms_P, terms_Q))
-    if use_numpy:
-        bucket = lambda terms: _bucket_arrays(terms, num_edges, chunk_mask)
-    else:
-        bucket = lambda terms: _bucket(terms, chunk_mask)
-    buckets = [(bucket(a), bucket(b)) for a, b in factors]
 
     chunks = dict()
     for x in range(chunk_mask + 1):
         for y in range(chunk_mask + 1):
             chunks.setdefault((x | y, x & y), []).append((x, y))
 
-    equations = set()
-    for pairs in chunks.values():
-        if use_numpy:
-            equations.update(_chunk_equations_numpy(buckets, pairs))
-        else:
+    equations: set[Equation] = set()
+    if use_numpy:
+        array_buckets = [
+            (_bucket_arrays(a, num_edges, chunk_mask), _bucket_arrays(b, num_edges, chunk_mask))
+            for a, b in factors
+        ]
+        for pairs in chunks.values():
+            equations.update(_chunk_equations_numpy(array_buckets, pairs))
+    else:
+        buckets = [(_bucket(a, chunk_mask), _bucket(b, chunk_mask)) for a, b in factors]
+        for pairs in chunks.values():
             equations.update(_dense(_chunk_equations(buckets, pairs), len(factors) - 1))
     return equations
 
 
-def expansion_equations(lhs, terms, num_edges, block_size=2**24):
+def expansion_equations(
+    lhs: list[MultilinearPolynomial],
+    terms: list[list[MultilinearPolynomial]],
+    num_edges: int,
+    block_size: int = 2**24,
+) -> set[Equation]:
     """
     The exact linear system saying that the product of the polynomials in lhs
     is a combination of products of polynomials, with one unknown for each
@@ -100,14 +122,14 @@ def expansion_equations(lhs, terms, num_edges, block_size=2**24):
     return _equations_from_columns(keys, columns, coeffs, len(terms))
 
 
-def _key_arrays(poly, num_edges, base):
+def _key_arrays(poly: MultilinearPolynomial, num_edges: int, base: int) -> KeyArrays:
     """The numpy arrays of the monomial keys and coefficients of a polynomial."""
     masks = np.array(list(poly.terms), dtype=np.uint64)
     coeffs = np.array(list(poly.terms.values()), dtype=np.int64)
     return _monomial_keys(masks, num_edges, base), coeffs
 
 
-def _expand_product(factors, block_size):
+def _expand_product(factors: list[KeyArrays], block_size: int) -> KeyArrays:
     """The distinct monomial keys and coefficients of a product of (keys, coefficients)."""
     keys = np.zeros(1, dtype=np.uint64)
     coeffs = np.ones(1, dtype=np.int64)
@@ -126,7 +148,9 @@ def _expand_product(factors, block_size):
     return keys, coeffs
 
 
-def _chunk_equations(buckets, pairs):
+def _chunk_equations(
+    buckets: list[tuple[Buckets, Buckets]], pairs: list[tuple[int, int]]
+) -> set[SparseEquation]:
     """
     The equations of exact_equations for the monomials in one chunk, with
     sparse rows of (index of the unknown, coefficient) pairs.
@@ -154,7 +178,7 @@ def _chunk_equations(buckets, pairs):
     return equations
 
 
-def _dense(sparse_equations, num_vars):
+def _dense(sparse_equations: set[SparseEquation], num_vars: int) -> set[Equation]:
     """Converts equations with sparse rows to the dense rows of exact_equations."""
     equations = set()
     for entries, constant in sparse_equations:
@@ -165,7 +189,7 @@ def _dense(sparse_equations, num_vars):
     return equations
 
 
-def _bucket(terms, mask):
+def _bucket(terms: Terms, mask: int) -> Buckets:
     """Sorts (bitmask, coefficient) terms by which of the edges in mask they contain."""
     buckets = dict()
     for term in terms:
@@ -173,7 +197,7 @@ def _bucket(terms, mask):
     return buckets
 
 
-def _bucket_arrays(terms, num_edges, mask):
+def _bucket_arrays(terms: Terms, num_edges: int, mask: int) -> ArrayBuckets:
     """
     Like _bucket, but each bucket holds numpy arrays of the monomial keys and
     coefficients of its terms. The key of a monomial is the sum of
@@ -192,7 +216,7 @@ def _bucket_arrays(terms, num_edges, mask):
     return {int(v): (keys[s:e], coeffs[s:e]) for v, s, e in zip(values, starts, ends)}
 
 
-def _monomial_keys(masks, num_edges, base=3):
+def _monomial_keys(masks: UIntArray, num_edges: int, base: int = 3) -> UIntArray:
     """The key of each monomial without squares, the sum of base**e over its edges e."""
     keys = np.zeros(len(masks), dtype=np.uint64)
     for e in range(num_edges):
@@ -200,7 +224,9 @@ def _monomial_keys(masks, num_edges, base=3):
     return keys
 
 
-def _chunk_equations_numpy(buckets, pairs):
+def _chunk_equations_numpy(
+    buckets: list[tuple[ArrayBuckets, ArrayBuckets]], pairs: list[tuple[int, int]]
+) -> set[Equation]:
     """
     The equations of exact_equations for the monomials in one chunk, from the
     buckets of _bucket_arrays, with dense rows.
@@ -228,7 +254,12 @@ def _chunk_equations_numpy(buckets, pairs):
     return _equations_from_columns(keys, columns, coeffs, len(buckets) - 1)
 
 
-def _equations_from_columns(keys, columns, coeffs, num_vars):
+def _equations_from_columns(
+    key_arrays: list[UIntArray],
+    column_arrays: list[IntArray],
+    coeff_arrays: list[IntArray],
+    num_vars: int,
+) -> set[Equation]:
     """
     The equations of exact_equations from arrays of the monomial keys and
     coefficients in each column, with the constant in column 0.
@@ -236,11 +267,11 @@ def _equations_from_columns(keys, columns, coeffs, num_vars):
     # Sparse rows, as runs of (column, coefficient) entries grouped by monomial,
     # with the constant in column 0, and the coefficient of unknown number k in
     # column k + 1. Columns were added in order, so a stable sort keeps them sorted
-    _, inverse = np.unique(np.concatenate(keys), return_inverse=True)
+    _, inverse = np.unique(np.concatenate(key_arrays), return_inverse=True)
     order = np.argsort(inverse.ravel(), kind='stable')
     monomials = inverse.ravel()[order]
-    columns = np.concatenate(columns)[order]
-    coeffs = np.concatenate(coeffs)[order]
+    columns = np.concatenate(column_arrays)[order]
+    coeffs = np.concatenate(coeff_arrays)[order]
 
     nonzero = coeffs != 0
     monomials, columns, coeffs = monomials[nonzero], columns[nonzero], coeffs[nonzero]
@@ -263,7 +294,9 @@ def _equations_from_columns(keys, columns, coeffs, num_vars):
     return equations
 
 
-def _unique_runs(starts, lengths, columns, coeffs):
+def _unique_runs(
+    starts: IntArray, lengths: IntArray, columns: IntArray, coeffs: IntArray
+) -> Iterable[tuple[int, int]]:
     """
     The (start, length) of one representative of each distinct run of
     (column, coefficient) entries. Runs are grouped by a hash, and kept as is
@@ -291,7 +324,7 @@ def _unique_runs(starts, lengths, columns, coeffs):
     return runs.values()
 
 
-def _sum_by_key(keys, coeffs):
+def _sum_by_key(keys: UIntArray, coeffs: IntArray) -> KeyArrays:
     """The distinct keys, sorted, and the sum of the coefficients of each."""
     if np.all(coeffs == 1):
         # Only needs a sort rather than an argsort
@@ -302,7 +335,11 @@ def _sum_by_key(keys, coeffs):
     return distinct, sums
 
 
-def _multiply_into(product, terms_a, terms_b):
+def _multiply_into(
+    product: dict[tuple[int, int], int],
+    terms_a: Iterable[tuple[int, int]],
+    terms_b: Iterable[tuple[int, int]],
+) -> None:
     """
     Adds the product of two polynomials, given as (bitmask of edges,
     coefficient) pairs, into product.

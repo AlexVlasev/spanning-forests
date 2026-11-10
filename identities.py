@@ -10,12 +10,17 @@ expanding every product (see equations.py).
 """
 
 import logging
+from collections.abc import Collection
+from typing import cast
 
 import sympy as sym
 
+from aliases import Equation, Marked, Pattern
 from equations import exact_equations
 from evaluation import numeric_equations
+from graph import Graph
 from modular import solve_modular
+from polynomial import MultilinearPolynomial
 from solution import Solution
 
 logger = logging.getLogger(__name__)
@@ -31,7 +36,15 @@ class Problem:
     rhs_Q, keyed by pattern. The unknowns c are ordered as in pairs.
     """
 
-    def __init__(self, P, Q, phi_P, phi_Q, rhs_P, rhs_Q):
+    def __init__(
+        self,
+        P: Pattern,
+        Q: Pattern,
+        phi_P: MultilinearPolynomial,
+        phi_Q: MultilinearPolynomial,
+        rhs_P: dict[Pattern, MultilinearPolynomial],
+        rhs_Q: dict[Pattern, MultilinearPolynomial],
+    ) -> None:
         self.P = P
         self.Q = Q
         self.phi_P = phi_P
@@ -44,11 +57,11 @@ class Problem:
 class IdentitySolver:
     """Searches for identities between the forest polynomials of a graph with marked vertices."""
 
-    def __init__(self, graph, marked):
+    def __init__(self, graph: Graph, marked: Marked) -> None:
         self.graph = graph
         self.marked = marked
 
-    def problem(self, P, Q, balanced=False):
+    def problem(self, P: Pattern, Q: Pattern, balanced: bool = False) -> Problem:
         """
         The Problem for P and Q, where by default the P_i have one part more
         than P and the Q_j one part fewer than Q. With balanced=True, the
@@ -59,7 +72,7 @@ class IdentitySolver:
             return self._problem(P, Q, (p + q) // 2, (p + q + 1) // 2)
         return self._problem(P, Q, p + 1, q - 1)
 
-    def _problem(self, P, Q, parts_P, parts_Q):
+    def _problem(self, P: Pattern, Q: Pattern, parts_P: int, parts_Q: int) -> Problem:
         phi_P = self.graph.forest_polynomial(self.marked, P)
         phi_Q = self.graph.forest_polynomial(self.marked, Q)
         logger.info(f'Polynomials {P} and {Q} have {len(phi_P)} and {len(phi_Q)} terms')
@@ -73,14 +86,18 @@ class IdentitySolver:
 
         return Problem(P, Q, phi_P, phi_Q, rhs_P, rhs_Q)
 
-    def get_equations(self, problem, chunk_edges=8, use_numpy=True):
+    def get_equations(
+        self, problem: Problem, chunk_edges: int = 8, use_numpy: bool = True
+    ) -> set[Equation]:
         """The exact linear system of a Problem, from equations.exact_equations."""
         logger.info(f'Multiplying {len(problem.pairs) + 1} pairs of polynomials')
         equations = exact_equations(problem, self.graph.num_edges, chunk_edges, use_numpy)
         logger.info(f'Found {len(equations)} distinct equations')
         return equations
 
-    def get_numeric_equations(self, problem, extra_points=10, seed=0, use_numpy=True):
+    def get_numeric_equations(
+        self, problem: Problem, extra_points: int = 10, seed: int = 0, use_numpy: bool = True
+    ) -> list[Equation]:
         """
         A linear system of a Problem from random evaluations, from
         evaluation.numeric_equations. Use verify_solution to confirm a
@@ -89,7 +106,7 @@ class IdentitySolver:
         logger.info(f'Evaluating polynomials at {len(problem.pairs) + extra_points} random points')
         return numeric_equations(problem, self.graph.num_edges, extra_points, seed, use_numpy)
 
-    def verify_solution(self, solution):
+    def verify_solution(self, solution: Solution) -> bool:
         """
         Confirms symbolically that every member of a solution family returned
         by solve_problem satisfies the identity, using the exact system of
@@ -101,7 +118,7 @@ class IdentitySolver:
         problem = self._problem(P, Q, len(set(p)), len(set(q)))
         return self._verify(problem, solution)
 
-    def _verify(self, problem, solution):
+    def _verify(self, problem: Problem, solution: Solution) -> bool:
         logger.info('Verifying solution symbolically')
         coefficients = [solution.coefficients[pair] for pair in problem.pairs]
         for row, constant in self.get_equations(problem):
@@ -110,7 +127,9 @@ class IdentitySolver:
                 return False
         return True
 
-    def solve_system(self, equations, num_vars, modular=True):
+    def solve_system(
+        self, equations: Collection[Equation], num_vars: int, modular: bool = True
+    ) -> tuple[sym.Expr, ...] | None:
         """
         The general solution of a linear system of (row, constant) equations,
         as a tuple of sympy expressions in free parameters x_0, x_1, ..., or
@@ -129,9 +148,16 @@ class IdentitySolver:
         b = sym.Matrix([constant for _, constant in equations])
         solutions = sym.linsolve((A, b), xs)
         # linsolve returns either EmptySet or a FiniteSet with one parametric solution
-        return solutions.args[0].args if solutions.args else None
+        return cast(tuple[sym.Expr, ...], solutions.args[0].args) if solutions.args else None
 
-    def solve_problem(self, P, Q, balanced=False, verify=False, modular=True):
+    def solve_problem(
+        self,
+        P: Pattern,
+        Q: Pattern,
+        balanced: bool = False,
+        verify: bool = False,
+        modular: bool = True,
+    ) -> Solution | None:
         """
         Finds the family of identities phi_P * phi_Q = sum of c * phi_P_i * phi_Q_j
         from random evaluations, as a Solution, or None if there is none.

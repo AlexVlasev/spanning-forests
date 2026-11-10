@@ -222,6 +222,7 @@ def test_numpy_equations_with_empty_polynomials():
 @pytest.mark.parametrize('name, marked, P, Q, balanced, dimension', CASES)
 def test_verify_solution(name, marked, P, Q, balanced, dimension):
     solver, solution = solve(name, marked, P, Q, balanced)
+    assert solution is not None
     assert solver.verify_solution(solution)
 
     # Changing any nonzero coefficient breaks the identity

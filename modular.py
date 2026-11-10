@@ -8,11 +8,13 @@ usually have small ones.
 
 import logging
 import math
+from collections.abc import Collection, Iterator
 from fractions import Fraction
 
 import numpy as np
 import sympy as sym
 
+from aliases import Equation, IntArray
 from evaluation import crt
 
 logger = logging.getLogger(__name__)
@@ -20,8 +22,11 @@ logger = logging.getLogger(__name__)
 # How many primes must agree before reporting that a system has no solution
 NO_SOLUTION_PRIMES = 3
 
+type Pivots = tuple[int, ...]
+type Entries = dict[int, list[tuple[int, Fraction]]]
 
-def solve_modular(equations, num_vars):
+
+def solve_modular(equations: Collection[Equation], num_vars: int) -> tuple[sym.Expr, ...] | None:
     """
     The general solution of a linear system of (row, constant) equations, as
     a tuple of sympy expressions in free parameters x_0, x_1, ..., or None if
@@ -57,7 +62,7 @@ def solve_modular(equations, num_vars):
             return _parametrize(best, entries, num_vars)
 
 
-def _primes():
+def _primes() -> Iterator[int]:
     """The primes below 2**31 in decreasing order, so products of two residues fit in an int64."""
     p = 2**31
     while True:
@@ -65,12 +70,12 @@ def _primes():
         yield p
 
 
-def _residues(equations, num_vars, p):
+def _residues(equations: Collection[Equation], num_vars: int, p: int) -> IntArray:
     rows = [[x % p for x in row] + [constant % p] for row, constant in equations]
     return np.array(rows, dtype=np.int64).reshape(len(rows), num_vars + 1)
 
 
-def _pivot_order(pivots):
+def _pivot_order(pivots: Pivots) -> tuple[int | float, ...]:
     """
     A sort key under which the pivots over the rationals come first: they are
     the earliest possible, so unlucky primes can only have later or fewer.
@@ -78,7 +83,7 @@ def _pivot_order(pivots):
     return (*pivots, math.inf)
 
 
-def reduced_row_echelon(matrix, p):
+def reduced_row_echelon(matrix: IntArray, p: int) -> tuple[IntArray, Pivots]:
     """
     The nonzero rows of the reduced row echelon form of an int64 matrix
     modulo a prime below 2**31, and the tuple of pivot columns. Changes the
@@ -103,7 +108,7 @@ def reduced_row_echelon(matrix, p):
     return matrix[: len(pivots)], tuple(pivots)
 
 
-def rational_reconstruction(value, modulus):
+def rational_reconstruction(value: int, modulus: int) -> Fraction | None:
     """
     The fraction n/d congruent to value modulo the modulus with |n| and d at
     most sqrt(modulus / 2), or None if there is none.
@@ -120,7 +125,9 @@ def rational_reconstruction(value, modulus):
     return Fraction(r1, t1)
 
 
-def _lift(residues, primes, num_vars, pivots):
+def _lift(
+    residues: list[IntArray], primes: list[int], num_vars: int, pivots: Pivots
+) -> Entries | None:
     """
     The nonzero entries of the reduced system over the rationals, as a dict
     mapping each non-pivot column (including the constant column) to a list
@@ -141,7 +148,7 @@ def _lift(residues, primes, num_vars, pivots):
     return entries
 
 
-def _satisfies(equations, pivots, entries):
+def _satisfies(equations: Collection[Equation], pivots: Pivots, entries: Entries) -> bool:
     """Whether the solution with these reduced entries satisfies every equation exactly."""
     for row, constant in equations:
         augmented = (*row, constant)
@@ -151,7 +158,7 @@ def _satisfies(equations, pivots, entries):
     return True
 
 
-def _parametrize(pivots, entries, num_vars):
+def _parametrize(pivots: Pivots, entries: Entries, num_vars: int) -> tuple[sym.Expr, ...]:
     xs = sym.symbols(f'x_:{num_vars}')
     terms = {pivot: [] for pivot in pivots}
     for column, values in entries.items():

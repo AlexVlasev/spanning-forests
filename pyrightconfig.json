@@ -1,0 +1,6 @@
+{
+  "executionEnvironments": [
+    { "root": "tests", "extraPaths": ["."], "reportOptionalMemberAccess": false },
+    { "root": "." }
+  ]
+}

@@ -1,19 +1,25 @@
+from typing import Any
+
+type Number = int | float
+type Power = tuple[int, ...]
+
+
 class Polynomial:
-    def __init__(self, variables, coefficients):
+    def __init__(self, variables: list[str] | None, coefficients: dict[Power, Any] | None) -> None:
         self.variables = variables if variables else []
         self.coefficients = coefficients if coefficients else dict()
 
-    def reciprocal(self):
+    def reciprocal(self) -> 'Polynomial':
         coefficients = dict()
         for power, coeff in self.coefficients.items():
             coefficients[tuple([-t for t in power])] = coeff
         return Polynomial(self.variables, coefficients)
 
-    def __neg__(self):
+    def __neg__(self) -> 'Polynomial':
         coefficients = {p: -c for p, c in self.coefficients.items()}
         return Polynomial(self.variables, coefficients)
 
-    def __add__(self, other):
+    def __add__(self, other: 'Number | Polynomial') -> 'Polynomial':
         if isinstance(other, float) or isinstance(other, int):
             coefficients = {p: c for p, c in self.coefficients.items()}
             zero = tuple((0 for _ in self.variables))
@@ -36,16 +42,16 @@ class Polynomial:
 
         return Polynomial(self.variables, coefficients)
 
-    def __radd__(self, other):
+    def __radd__(self, other: Number) -> 'Polynomial':
         return self + other
 
-    def __rmul__(self, other):
+    def __rmul__(self, other: Number) -> 'Polynomial':
         return self * other
 
-    def __sub__(self, other):
+    def __sub__(self, other: 'Number | Polynomial') -> 'Polynomial':
         return self + (-other)
 
-    def __mul__(self, other):
+    def __mul__(self, other: 'Number | Polynomial') -> 'Polynomial':
         if isinstance(other, int) or isinstance(other, float):
             return Polynomial(self.variables, {p: c * other for p, c in self.coefficients.items()})
         if not isinstance(other, Polynomial):
@@ -63,7 +69,7 @@ class Polynomial:
 
         return Polynomial(self.variables, new_coefficients)
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         if isinstance(other, int) or isinstance(other, float):
             constant = {tuple(0 for _ in self.variables): other} if other else dict()
             return self._nonzero() == constant
@@ -74,14 +80,14 @@ class Polynomial:
 
         return self._nonzero() == other._nonzero()
 
-    def _nonzero(self):
+    def _nonzero(self) -> dict[Power, Any]:
         """The coefficients without the ones that have cancelled to 0."""
         return {p: c for p, c in self.coefficients.items() if c != 0}
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return str(self)
 
-    def __monomial(self, power):
+    def __monomial(self, power: Power) -> str:
         elements = []
         for p, x in zip(power, self.variables):
             if p == 0:
@@ -96,7 +102,7 @@ class Polynomial:
 
         return ''.join(sorted(elements))
 
-    def __str__(self):
+    def __str__(self) -> str:
         terms = []
         items = sorted(self.coefficients.items(), key=lambda x: x[0])
         for p, c in items:
@@ -125,7 +131,7 @@ class Polynomial:
             return '0'
         return expr
 
-    def apply(self, variable, value):
+    def apply(self, variable: str, value: Number) -> 'Polynomial':
         index = -1
         for i, var in enumerate(self.variables):
             if var == variable:
@@ -144,7 +150,7 @@ class Polynomial:
 
         return Polynomial(self.variables, coefficients)
 
-    def collect(self, vars_to_keep):
+    def collect(self, vars_to_keep: int) -> 'Polynomial':
         new_vars = self.variables[:vars_to_keep]
         rest_vars = self.variables[vars_to_keep:]
         coefficients = dict()
@@ -157,7 +163,7 @@ class Polynomial:
             coefficients[new_power] = coefficients[new_power] + poly
         return Polynomial(new_vars, coefficients)
 
-    def truncate(self, variable, power):
+    def truncate(self, variable: str, power: int) -> 'Polynomial':
         index = -1
         for i, var in enumerate(self.variables):
             if variable == var:
@@ -182,24 +188,24 @@ class MultilinearPolynomial:
     each monomial (bit e for variable e) to its coefficient.
     """
 
-    def __init__(self, variables, terms):
+    def __init__(self, variables: list[str], terms: dict[int, int]) -> None:
         self.variables = variables
         self.terms = dict(terms)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.terms)
 
-    def __eq__(self, other):
+    def __eq__(self, other: object) -> bool:
         if not isinstance(other, MultilinearPolynomial):
             return NotImplemented
         return self.variables == other.variables and self.terms == other.terms
 
-    def __mul__(self, scalar):
+    def __mul__(self, scalar: int) -> 'MultilinearPolynomial':
         return MultilinearPolynomial(self.variables, {m: c * scalar for m, c in self.terms.items()})
 
     __rmul__ = __mul__
 
-    def to_polynomial(self):
+    def to_polynomial(self) -> Polynomial:
         """The same polynomial as a Polynomial, with exponent tuples."""
         coefficients = dict()
         for mask, c in self.terms.items():
@@ -207,11 +213,11 @@ class MultilinearPolynomial:
             coefficients[power] = c
         return Polynomial(self.variables, coefficients)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return str(self.to_polynomial())
 
 
-def edge_indices(mask):
+def edge_indices(mask: int) -> tuple[int, ...]:
     """The indices of the set bits of a bitmask, from the lowest."""
     indices = []
     while mask:

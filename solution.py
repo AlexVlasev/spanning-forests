@@ -3,7 +3,12 @@ Families of identities between products of spanning forest polynomials, as
 found by IdentitySolver and relations.expand_product.
 """
 
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Any
+
 import sympy as sym
+
+from aliases import Pattern, Term
 
 
 class Solution:
@@ -19,24 +24,29 @@ class Solution:
     symbolically, and None before.
     """
 
-    def __init__(self, product, coefficients, verified=None):
+    def __init__(
+        self,
+        product: Sequence[Pattern],
+        coefficients: Mapping[Any, Any],
+        verified: bool | None = None,
+    ) -> None:
         self.product = tuple(product)
         self.coefficients = {pair: sym.sympify(c) for pair, c in coefficients.items()}
         self.verified = verified
 
     @property
-    def free_parameters(self):
+    def free_parameters(self) -> list[sym.Symbol]:
         symbols = set().union(*(c.free_symbols for c in self.coefficients.values()))
         return sorted(symbols, key=str)
 
     @property
-    def dimension(self):
+    def dimension(self) -> int:
         return len(self.free_parameters)
 
-    def classify(self):
+    def classify(self) -> dict[str, list[tuple[Term, sym.Expr]]]:
         return classify(self.coefficients)
 
-    def report(self):
+    def report(self) -> str:
         """A summary of the coefficients of the family, as printed by the command line."""
         classes = self.classify()
         lines = []
@@ -52,7 +62,7 @@ class Solution:
         lines.append(f'Forbidden: {len(classes["forbidden"])}')
         return '\n'.join(lines)
 
-    def identity(self):
+    def identity(self) -> str:
         """The identity, listing the nonzero terms of the right hand side."""
         lines = [f'{_format_product(self.product)} =']
         for term, c in self.coefficients.items():
@@ -61,11 +71,11 @@ class Solution:
         return '\n'.join(lines)
 
 
-def _format_product(patterns):
+def _format_product(patterns: Iterable[Pattern]) -> str:
     return ' * '.join(f'phi_{pattern}' for pattern in patterns)
 
 
-def classify(values):
+def classify(values: Mapping[Any, Any]) -> dict[str, list[tuple[Term, sym.Expr]]]:
     """
     Sorts coefficients into exactly one of:
         forbidden: always 0

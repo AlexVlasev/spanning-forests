@@ -14,13 +14,17 @@ import itertools
 import logging
 import math
 from collections import Counter, defaultdict, namedtuple
+from collections.abc import Iterable, Sequence
 from fractions import Fraction
+from typing import Any, cast
 
 import numpy as np
+import sympy as sym
 
+from aliases import Equation, IntArray, Marked, Pattern, Point, Shape, Term
 from equations import expansion_equations
 from evaluation import EVALUATION_PRIMES, evaluate_all_numpy, random_points
-from graph import MAX_PARTS, check_pattern
+from graph import MAX_PARTS, Graph, check_pattern
 from modular import reduced_row_echelon, solve_modular
 from solution import Solution
 
@@ -30,8 +34,10 @@ PRIME = EVALUATION_PRIMES[0]
 
 RelationCounts = namedtuple('RelationCounts', 'products dimension inherited new')
 
+type Relation = dict[Term, int]
 
-def product_terms(graph, marked, shapes):
+
+def product_terms(graph: Graph, marked: Marked, shapes: Sequence[Shape]) -> list[Term]:
     """
     Every distinct product with one of the shapes, as a tuple of patterns.
     Partitions with no spanning forests on the graph are left out.
@@ -53,12 +59,14 @@ def product_terms(graph, marked, shapes):
     return terms
 
 
-def _check_shapes(shapes):
+def _check_shapes(shapes: Iterable[Shape]) -> None:
     if len({(len(shape), sum(shape)) for shape in shapes}) > 1:
         raise ValueError('every shape needs the same number of factors and total number of parts')
 
 
-def relation_dimension(graph, marked, shapes, extra_points=10, seed=0):
+def relation_dimension(
+    graph: Graph, marked: Marked, shapes: Sequence[Shape], extra_points: int = 10, seed: int = 0
+) -> int:
     """
     The dimension of the space of relations on a graph between all products
     with the given shapes, from product_terms.
@@ -76,7 +84,7 @@ def relation_dimension(graph, marked, shapes, extra_points=10, seed=0):
     return len(terms) - len(pivots)
 
 
-def all_shapes(num_marked, factors, total):
+def all_shapes(num_marked: int, factors: int, total: int) -> list[Shape]:
     """
     Every shape with this many factors and total number of parts, for
     num_marked vertices, within the MAX_PARTS parts that patterns can label.
@@ -85,11 +93,13 @@ def all_shapes(num_marked, factors, total):
     return [s for s in itertools.combinations_with_replacement(parts, factors) if sum(s) == total]
 
 
-def _part_counts(num_marked):
+def _part_counts(num_marked: int) -> range:
     return range(1, min(num_marked, MAX_PARTS) + 1)
 
 
-def relation_counts(graph, marked, shapes, extra_points=10, seed=0):
+def relation_counts(
+    graph: Graph, marked: Marked, shapes: Sequence[Shape], extra_points: int = 10, seed: int = 0
+) -> RelationCounts:
     """
     The RelationCounts of a space of relations on a graph: how many of its
     dimensions are inherited from fewer factors, as a relation with one
@@ -118,7 +128,9 @@ def relation_counts(graph, marked, shapes, extra_points=10, seed=0):
     return RelationCounts(len(terms), len(kernel), len(kernel) - new, new)
 
 
-def _kernel(graph, marked, terms, extra_points, seed):
+def _kernel(
+    graph: Graph, marked: Marked, terms: list[Term], extra_points: int, seed: int
+) -> IntArray:
     """A basis modulo PRIME of the relations between the terms, one row per relation."""
     if not terms:
         return np.zeros((0, 0), dtype=np.int64)
@@ -132,18 +144,28 @@ def _kernel(graph, marked, terms, extra_points, seed):
     return kernel
 
 
-def _echelon_form(graph, marked, terms, extra_points, seed):
+def _echelon_form(
+    graph: Graph, marked: Marked, terms: list[Term], extra_points: int, seed: int
+) -> tuple[IntArray, tuple[int, ...]]:
     """The reduced rows and pivots modulo PRIME of the values of the terms at random points."""
     points = random_points(len(terms) + extra_points, graph.num_edges, seed)
     return reduced_row_echelon(_product_matrix(graph, marked, terms, points), PRIME)
 
 
-def _inherited(graph, marked, factors, total, index, extra_points, seed):
+def _inherited(
+    graph: Graph,
+    marked: Marked,
+    factors: int,
+    total: int,
+    index: dict[Term, int],
+    extra_points: int,
+    seed: int,
+) -> IntArray:
     """
     The relations between the products in index that are a relation with one
     factor fewer times a forest polynomial, one row per relation and polynomial.
     """
-    rows = [np.zeros((0, len(index)), dtype=np.int64)]
+    rows: list[IntArray] = [np.zeros((0, len(index)), dtype=np.int64)]
     for parts in _part_counts(len(marked)):
         if factors == 1:
             break
@@ -158,12 +180,14 @@ def _inherited(graph, marked, factors, total, index, extra_points, seed):
     return np.vstack(rows)
 
 
-def _with_factor(term, pattern):
+def _with_factor(term: Term, pattern: Pattern) -> Term:
     """A product with one more factor, sorted as in product_terms."""
     return tuple(sorted((*term, pattern), key=lambda p: (len(set(p)), p)))
 
 
-def find_relations(graph, marked, shapes, extra_points=10, seed=0):
+def find_relations(
+    graph: Graph, marked: Marked, shapes: Sequence[Shape], extra_points: int = 10, seed: int = 0
+) -> list[Relation]:
     """
     A basis of the space of relations on a graph between all products with
     the given shapes, from product_terms. Each relation is a dict mapping
@@ -181,6 +205,7 @@ def find_relations(graph, marked, shapes, extra_points=10, seed=0):
 
     points = random_points(len(terms) + extra_points, graph.num_edges, seed)
     values = solve_modular(_exact_equations(graph, marked, terms, points), len(terms))
+    assert values is not None, 'a system with zero constants always has a solution'
 
     # Each free parameter of the solution gives one relation of the basis
     relations = dict()
@@ -192,7 +217,15 @@ def find_relations(graph, marked, shapes, extra_points=10, seed=0):
     return [_primitive(relations[symbol]) for symbol in ordered]
 
 
-def expand_product(graph, marked, product, shapes, verify=False, extra_points=10, seed=0):
+def expand_product(
+    graph: Graph,
+    marked: Marked,
+    product: Sequence[Pattern],
+    shapes: Sequence[Shape],
+    verify: bool = False,
+    extra_points: int = 10,
+    seed: int = 0,
+) -> Solution | None:
     """
     Finds the family of identities
 
@@ -230,7 +263,7 @@ def expand_product(graph, marked, product, shapes, verify=False, extra_points=10
     return solution
 
 
-def verify_expansion(graph, marked, solution):
+def verify_expansion(graph: Graph, marked: Marked, solution: Solution) -> bool:
     """
     Confirms exactly that every member of a family from expand_product is an
     identity on the graph, by expanding every product into monomials. Each
@@ -256,15 +289,13 @@ def verify_expansion(graph, marked, solution):
     return True
 
 
-def _affine_parts(coefficient):
+def _affine_parts(coefficient: sym.Expr) -> dict[Any, Fraction]:
     """An affine sympy expression as a dict from its symbols, and 1, to Fractions."""
-    return {
-        symbol: Fraction(int(value.p), int(value.q))
-        for symbol, value in coefficient.as_coefficients_dict().items()
-    }
+    parts = cast(dict[Any, sym.Rational], coefficient.as_coefficients_dict())
+    return {symbol: Fraction(int(value.p), int(value.q)) for symbol, value in parts.items()}
 
 
-def format_relation(relation):
+def format_relation(relation: Relation) -> str:
     """A relation from find_relations with one term per line, as printed by the command line."""
     lines = []
     for term, coefficient in relation.items():
@@ -273,7 +304,7 @@ def format_relation(relation):
     return '\n'.join(lines)
 
 
-def _primitive(relation):
+def _primitive(relation: dict[Term, Any]) -> Relation:
     """A relation rescaled to coprime integer coefficients, with the first positive."""
     denominator = math.lcm(*(c.q for c in relation.values()))
     integers = {term: int(c * denominator) for term, c in relation.items()}
@@ -283,11 +314,17 @@ def _primitive(relation):
     return {term: c // divisor for term, c in integers.items()}
 
 
-def _patterns(terms):
+def _patterns(terms: Iterable[Term]) -> list[Pattern]:
     return sorted(set(itertools.chain.from_iterable(terms)))
 
 
-def _exact_equations(graph, marked, terms, points, product=None):
+def _exact_equations(
+    graph: Graph,
+    marked: Marked,
+    terms: list[Term],
+    points: list[Point],
+    product: Term | None = None,
+) -> list[Equation]:
     """
     The (row, constant) equations, with exact values of the products at each
     point. The constant is the value of the given product, and 0 without one.
@@ -303,7 +340,9 @@ def _exact_equations(graph, marked, terms, points, product=None):
     ]
 
 
-def _product_matrix(graph, marked, terms, points):
+def _product_matrix(
+    graph: Graph, marked: Marked, terms: list[Term], points: list[Point]
+) -> IntArray:
     """The (points, products) array of the values of the products modulo PRIME."""
     patterns = _patterns(terms)
     index = {pattern: i for i, pattern in enumerate(patterns)}

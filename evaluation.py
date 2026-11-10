@@ -9,10 +9,15 @@ one equation per point. Used to find solutions quickly.
 
 import math
 import random
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from polynomial import edge_indices
+from aliases import Equation, Point
+from polynomial import MultilinearPolynomial, edge_indices
+
+if TYPE_CHECKING:
+    from identities import Problem
 
 # Random points have coordinates from 1 to MAX_POINT. Each point fails to add an
 # independent equation with probability at most degree / MAX_POINT, whatever the
@@ -30,13 +35,19 @@ EVALUATION_PRIMES = [
 ]
 
 
-def random_points(num_points, num_edges, seed=0):
+def random_points(num_points: int, num_edges: int, seed: int = 0) -> list[Point]:
     """Reproducible random points with coordinates from 1 to MAX_POINT."""
     rng = random.Random(seed)
     return [[rng.randint(1, MAX_POINT) for _ in range(num_edges)] for _ in range(num_points)]
 
 
-def numeric_equations(problem, num_edges, extra_points=10, seed=0, use_numpy=True):
+def numeric_equations(
+    problem: 'Problem',
+    num_edges: int,
+    extra_points: int = 10,
+    seed: int = 0,
+    use_numpy: bool = True,
+) -> list[Equation]:
     """
     Builds a linear system for the unknowns of a Problem by evaluating both
     sides exactly at random integer points, with one equation per point, in
@@ -66,22 +77,24 @@ def numeric_equations(problem, num_edges, extra_points=10, seed=0, use_numpy=Tru
     return equations
 
 
-def _terms(poly):
+def _terms(poly: MultilinearPolynomial) -> list[tuple[int, tuple[int, ...]]]:
     """The terms of a MultilinearPolynomial as (coefficient, edge indices) pairs."""
     return [(c, edge_indices(mask)) for mask, c in poly.terms.items()]
 
 
-def _evaluate(terms, point):
+def _evaluate(terms: list[tuple[int, tuple[int, ...]]], point: Point) -> int:
     return sum(c * math.prod(point[e] for e in edges) for c, edges in terms)
 
 
-def evaluate_all(poly, points):
+def evaluate_all(poly: MultilinearPolynomial, points: list[Point]) -> list[int]:
     """The exact values of a polynomial at each point, one point at a time."""
     terms = _terms(poly)
     return [_evaluate(terms, point) for point in points]
 
 
-def evaluate_all_numpy(poly, points, block_size=2**22):
+def evaluate_all_numpy(
+    poly: MultilinearPolynomial, points: list[Point], block_size: int = 2**22
+) -> list[int]:
     """
     The exact values of a polynomial at each point. The polynomial is
     evaluated at all points at once modulo enough primes that their product
@@ -129,7 +142,7 @@ def evaluate_all_numpy(poly, points, block_size=2**22):
     return exact
 
 
-def crt(residues, primes):
+def crt(residues: list[int], primes: list[int]) -> int:
     """The integer modulo the product of the primes with the given residues."""
     value, modulus = 0, 1
     for r, p in zip(residues, primes):

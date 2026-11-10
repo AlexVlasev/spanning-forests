@@ -18,6 +18,7 @@ import logging
 import sys
 from time import time
 
+from aliases import AdjacencyMatrix, Marked, Shape, Term
 from graph import Graph, complete_graph
 from identities import IdentitySolver
 from relations import (
@@ -28,9 +29,10 @@ from relations import (
     relation_counts,
     relation_dimension,
 )
+from solution import Solution
 
 
-def parse_graph(spec):
+def parse_graph(spec: str) -> AdjacencyMatrix:
     """An adjacency matrix from K<n> for the complete graph, or edges like 0-1,1-2,2-0."""
     if spec[:1] in 'Kk' and spec[1:].isdigit():
         return complete_graph(int(spec[1:]))
@@ -47,25 +49,25 @@ def parse_graph(spec):
     return matrix
 
 
-def parse_vertices(spec):
+def parse_vertices(spec: str) -> list[int]:
     try:
         return [int(v) for v in spec.split(',')]
     except ValueError:
         raise argparse.ArgumentTypeError(f'expected vertices like 0,1,2, got {spec!r}')
 
 
-def parse_shape(spec):
+def parse_shape(spec: str) -> Shape:
     try:
         return tuple(int(parts) for parts in spec.split(','))
     except ValueError:
         raise argparse.ArgumentTypeError(f'expected numbers of parts like 2,3, got {spec!r}')
 
 
-def parse_product(spec):
+def parse_product(spec: str) -> Term:
     return tuple(spec.split(','))
 
 
-def print_relations(graph, marked, args):
+def print_relations(graph: Graph, marked: Marked, args: argparse.Namespace) -> None:
     shapes = args.relations
     if args.new:
         counts = relation_counts(graph, marked, shapes)
@@ -81,7 +83,7 @@ def print_relations(graph, marked, args):
             print(f'\nRelation {i}:\n{format_relation(relation)}')
 
 
-def print_sweep(marked, shapes, largest):
+def print_sweep(marked: Marked, shapes: list[Shape], largest: int) -> None:
     """The counts on each complete graph that contains the marked vertices, up to K_largest."""
     print(f'{"Graph":<6}{"Products":>10}{"Dimension":>11}{"Inherited":>11}{"New":>7}')
     for n in range(max(marked) + 1, largest + 1):
@@ -93,7 +95,7 @@ def print_sweep(marked, shapes, largest):
         )
 
 
-def print_solution(solution):
+def print_solution(solution: Solution | None) -> None:
     print('\n====================================\n')
     if solution is None:
         print('No Solution')
@@ -107,7 +109,7 @@ def print_solution(solution):
             print('\nSymbolic verification FAILED')
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description='Search for identities '
         'phi_P * phi_Q = sum of c(P_i, Q_j) * phi_P_i * phi_Q_j '
@@ -227,6 +229,7 @@ def main(argv=None):
         print(f'\nComputation took: {time() - start:.2f} sec')
         return 0
 
+    assert args.P is not None and args.Q is not None
     solver = IdentitySolver(Graph(args.graph), marked)
     try:
         solution = solver.solve_problem(

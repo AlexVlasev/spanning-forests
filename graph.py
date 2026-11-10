@@ -11,18 +11,19 @@ import itertools
 
 import numpy as np
 
+from aliases import AdjacencyMatrix, Marked, Pattern
 from polynomial import MultilinearPolynomial
 
 # Patterns label the parts of a partition with the digits 1 to 9
 MAX_PARTS = 9
 
 
-def complete_graph(n):
+def complete_graph(n: int) -> AdjacencyMatrix:
     """The adjacency matrix of the complete graph K_n."""
     return [[0 if i == j else 1 for j in range(n)] for i in range(n)]
 
 
-def check_pattern(pattern, num_marked):
+def check_pattern(pattern: Pattern, num_marked: int) -> None:
     """Raises a ValueError unless pattern is a partition of num_marked vertices in standard form."""
     labels = dict()
     standard = ''.join(labels.setdefault(c, str(len(labels) + 1)) for c in pattern)
@@ -34,7 +35,7 @@ def check_pattern(pattern, num_marked):
 
 
 class Graph:
-    def __init__(self, matrix):
+    def __init__(self, matrix: AdjacencyMatrix) -> None:
         self.num_vertices = len(matrix)
 
         self.edges = []
@@ -60,7 +61,7 @@ class Graph:
         # Forest polynomials by (marked vertices, number of parts)
         self._forest_polynomials = dict()
 
-    def _is_connected(self, excluded):
+    def _is_connected(self, excluded: set[int]) -> bool:
         """Whether the edges not in excluded connect every vertex."""
         neighbours = [[] for _ in range(self.num_vertices)]
         for e, (i, j) in enumerate(self.edges):
@@ -77,7 +78,7 @@ class Graph:
                     stack.append(w)
         return len(seen) == self.num_vertices
 
-    def _enumerate_trees(self):
+    def _enumerate_trees(self) -> list[int]:
         """
         Lists every spanning tree as a bitmask of its edges.
 
@@ -90,7 +91,7 @@ class Graph:
         trees = []
         excluded = set()
 
-        def search(e, tree, size, components):
+        def search(e: int, tree: int, size: int, components: list[int]) -> None:
             if size == self.num_vertices - 1:
                 trees.append(tree)
                 return
@@ -110,7 +111,7 @@ class Graph:
             search(0, 0, 0, list(range(self.num_vertices)))
         return trees
 
-    def pattern(self, forest, marked):
+    def pattern(self, forest: int, marked: Marked) -> Pattern:
         """
         Labels each marked vertex by the tree of the forest (a bitmask of its
         edges) containing it, numbering the trees in order of first
@@ -118,7 +119,7 @@ class Graph:
         """
         parent = list(range(self.num_vertices))
 
-        def find(v):
+        def find(v: int) -> int:
             while parent[v] != v:
                 v = parent[v]
             return v
@@ -130,7 +131,9 @@ class Graph:
         labels = dict()
         return ''.join(str(labels.setdefault(find(v), len(labels) + 1)) for v in marked)
 
-    def forest_polynomials(self, marked, num_parts):
+    def forest_polynomials(
+        self, marked: Marked, num_parts: int
+    ) -> dict[Pattern, MultilinearPolynomial]:
         """
         Computes the spanning forest polynomial of every partition of the
         marked vertices into num_parts parts, keyed by pattern. Results are
@@ -152,14 +155,16 @@ class Graph:
         # A copy, so that callers cannot change the cached dict
         return dict(self._forest_polynomials[key])
 
-    def _check_marked(self, marked):
+    def _check_marked(self, marked: Marked) -> None:
         if len(set(marked)) != len(marked):
             raise ValueError(f'marked vertices must be distinct, got {list(marked)}')
         for v in marked:
             if not 0 <= v < self.num_vertices:
                 raise ValueError(f'the graph has no vertex {v}')
 
-    def _compute_forest_polynomials(self, marked, num_parts):
+    def _compute_forest_polynomials(
+        self, marked: Marked, num_parts: int
+    ) -> dict[Pattern, MultilinearPolynomial]:
         if self.num_edges <= 64 and self.trees:
             forests = self._forests_numpy(num_parts)
         else:
@@ -174,7 +179,7 @@ class Graph:
 
         return {p: MultilinearPolynomial(self.edge_vars, terms[p]) for p in sorted(terms)}
 
-    def _forests(self, num_parts):
+    def _forests(self, num_parts: int) -> set[int]:
         """The distinct bitmasks of every spanning tree minus num_parts - 1 of its edges."""
         forests = set()
         for tree in self.trees:
@@ -182,7 +187,7 @@ class Graph:
                 forests.add(tree ^ sum(removed))
         return forests
 
-    def _forests_numpy(self, num_parts):
+    def _forests_numpy(self, num_parts: int) -> list[int]:
         """
         The distinct bitmasks of every spanning tree minus num_parts - 1 of its
         edges, computed for all trees at once. Needs at most 64 edges.
@@ -202,7 +207,7 @@ class Graph:
             return []
         return [int(forest) for forest in np.unique(np.concatenate(forests))]
 
-    def forest_polynomial(self, marked, pattern):
+    def forest_polynomial(self, marked: Marked, pattern: Pattern) -> MultilinearPolynomial:
         """
         The spanning forest polynomial of a single partition of the marked
         vertices, which is empty if no spanning forest induces it.
@@ -215,7 +220,7 @@ class Graph:
         return polys.get(pattern, MultilinearPolynomial(self.edge_vars, dict()))
 
 
-def _bits(mask):
+def _bits(mask: int) -> list[int]:
     """The set bits of a bitmask, each as a bitmask of its own, from the lowest."""
     bits = []
     while mask:
