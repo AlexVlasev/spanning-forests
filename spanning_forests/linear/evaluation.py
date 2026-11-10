@@ -1,10 +1,6 @@
 """
-A linear system for the unknowns of an identity search,
-
-    phi_P * phi_Q = sum of c(P_i, Q_j) * phi_P_i * phi_Q_j
-
-from exact evaluations of the polynomials at random integer points, with
-one equation per point. Used to find solutions quickly.
+Linear systems from exact evaluations of polynomials at random integer points,
+with one equation per point. See docs/modular-solver.md.
 """
 
 import math
@@ -19,13 +15,10 @@ from spanning_forests.polynomial import MultilinearPolynomial, edge_indices
 if TYPE_CHECKING:
     from spanning_forests.identities import Problem
 
-# Random points have coordinates from 1 to MAX_POINT. Each point fails to add an
-# independent equation with probability at most degree / MAX_POINT, whatever the
-# previous points were, by the Schwartz-Zippel lemma
+# Random points have coordinates from 1 to MAX_POINT, which sets the failure bound in the README
 MAX_POINT = 2**20
 
-# The largest primes below 2**31, for evaluating modulo p, so that products of
-# two residues fit in an int64
+# Below 2**31, so that products of two residues fit in an int64
 EVALUATION_PRIMES = [
     2**31 - d
     for d in (
@@ -49,18 +42,8 @@ def numeric_equations(
     use_numpy: bool = True,
 ) -> list[Equation]:
     """
-    Builds a linear system for the unknowns of a Problem by evaluating both
-    sides exactly at random integer points, with one equation per point, in
-    the same (row, constant) form as equations.exact_equations.
-
-    Each point gives a random combination of the exact equations, so with a
-    few more points than unknowns both systems have the same solutions,
-    except with the small probability given in the README. A failure could
-    only add spurious solutions.
-
-    With use_numpy, the polynomials are evaluated at all points at once,
-    modulo a few primes, and the exact values recovered with the Chinese
-    remainder theorem. Otherwise they are evaluated one point at a time.
+    The linear system of a Problem from evaluating both sides at random
+    integer points, in the (row, constant) form of equations.exact_equations.
     """
     points = random_points(len(problem.pairs) + extra_points, num_edges, seed)
 
@@ -98,10 +81,8 @@ def evaluate_all_numpy(
     poly: MultilinearPolynomial, points: list[Point], block_size: int = 2**22
 ) -> list[int]:
     """
-    The exact values of a polynomial at each point. The polynomial is
-    evaluated at all points at once modulo enough primes that their product
-    exceeds twice the largest possible absolute value, and the exact values
-    are recovered with the Chinese remainder theorem.
+    The exact values of a polynomial at each point, evaluated at all points
+    at once modulo enough primes to recover them.
     """
     terms = _terms(poly)
     if not terms:
@@ -122,7 +103,6 @@ def evaluate_all_numpy(
             raise ValueError('values too large to recover from the evaluation primes')
         primes.append(EVALUATION_PRIMES[len(primes)])
 
-    # Evaluate in blocks of terms to bound the size of the (points, terms) arrays
     step = max(1, block_size // len(points))
     residues = []
     for p in primes:

@@ -1,10 +1,6 @@
 """
-Graphs, their spanning trees, and their spanning forest polynomials.
-
-1. Enumerate the spanning trees, giving the tree polynomial and its reciprocal psi_G
-2. Remove k - 1 edges from every spanning tree to get every spanning forest with k trees
-3. Label each forest by the partition it induces on the marked vertices
-4. Collect the forest monomials by partition to form the phi_G polynomials
+Graphs, their spanning trees, and their spanning forest polynomials. See
+docs/forest-polynomials.md.
 """
 
 import itertools
@@ -50,8 +46,6 @@ class Graph:
         # Each spanning tree as a bitmask, with bit e set if it contains edge e
         self.trees = self._enumerate_trees()
 
-        # The tree polynomial has the edges in each tree, and the graph
-        # polynomial psi_G the edges not in each tree
         all_edges = (1 << self.num_edges) - 1
         self.tree_poly = MultilinearPolynomial(self.edge_vars, {tree: 1 for tree in self.trees})
         self.graph_poly = MultilinearPolynomial(
@@ -80,13 +74,8 @@ class Graph:
 
     def _enumerate_trees(self) -> list[int]:
         """
-        Lists every spanning tree as a bitmask of its edges.
-
-        Walks the edges in order, deciding for each whether the tree contains
-        it. An edge is only included if it joins two different trees of the
-        forest chosen so far, and only excluded if the remaining edges still
-        connect the graph, so every branch of the search ends in a spanning
-        tree.
+        Lists every spanning tree as a bitmask of its edges, by a search in which
+        every branch ends in a spanning tree.
         """
         trees = []
         excluded = set()
@@ -138,17 +127,10 @@ class Graph:
         self, marked: Marked, num_parts: int
     ) -> dict[Pattern, MultilinearPolynomial]:
         """
-        Computes the spanning forest polynomial of every partition of the
-        marked vertices into num_parts parts, keyed by pattern. Results are
-        cached, so repeated calls are free.
-
-        Every spanning forest with k trees is a spanning tree minus k - 1 of
-        its edges, so removing edges from the trees finds them all. A forest
-        whose marked vertices span fewer than k trees has a tree without any
-        marked vertex, so it belongs to no pattern.
+        The spanning forest polynomial of every partition of the marked vertices
+        into num_parts parts, keyed by pattern, and cached.
         """
         self._check_marked(marked)
-        # Patterns label parts with single digits
         if not 1 <= num_parts <= MAX_PARTS:
             raise ValueError(f'expected 1 to {MAX_PARTS} parts, got {num_parts}')
 
@@ -200,7 +182,6 @@ class Graph:
         """
         trees = np.array(self.trees, dtype=np.uint64)
         edges = np.arange(self.num_edges, dtype=np.uint64)
-        # The n - 1 edges of each tree, as single bit masks, one row per tree
         contains = (trees[:, None] >> edges) & np.uint64(1)
         positions = np.nonzero(contains)[1].reshape(len(trees), self.num_vertices - 1)
         bits = np.uint64(1) << positions.astype(np.uint64)

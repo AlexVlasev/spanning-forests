@@ -72,6 +72,7 @@ marking.expand_product(('1111', '1234', '1234'), [(3, 3, 3)], verify=True)  # a 
 
 Longer explanations of the trickier parts are in `docs/`:
 
+- [Generating forest polynomials](docs/forest-polynomials.md): spanning trees, forests, and patterns.
 - [The modular solver](docs/modular-solver.md): how linear systems are solved exactly, and what the result guarantees.
 - [Relations between products](docs/relations.md): shapes, dimensions, inherited and new relations, and expanding a fixed product.
 - [Verification by expansion](docs/verification.md): monomial keys, chunking, and exact arithmetic.

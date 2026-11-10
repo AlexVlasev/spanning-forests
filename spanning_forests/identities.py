@@ -4,9 +4,7 @@ Searches for quadratic identities between spanning forest polynomials,
     phi_P * phi_Q = sum of c(P_i, Q_j) * phi_P_i * phi_Q_j
 
 where P_i and Q_j range over all partitions of the marked vertices into a
-fixed number of parts. Identities are found from exact evaluations at random
-points (see evaluation.py), and can then be verified symbolically by
-expanding every product (see equations.py).
+fixed number of parts.
 """
 
 import logging
@@ -100,17 +98,15 @@ class IdentitySolver:
     ) -> list[Equation]:
         """
         A linear system of a Problem from random evaluations, from
-        evaluation.numeric_equations. Use verify_solution to confirm a
-        solution symbolically.
+        evaluation.numeric_equations.
         """
         logger.info(f'Evaluating polynomials at {len(problem.pairs) + extra_points} random points')
         return numeric_equations(problem, self.graph.num_edges, extra_points, seed, use_numpy)
 
     def verify_solution(self, solution: Solution) -> bool:
         """
-        Confirms symbolically that every member of a solution family returned
-        by solve_problem satisfies the identity, using the exact system of
-        exact_system.
+        Confirms symbolically that every member of a family from solve_problem
+        is an identity on the graph. See docs/verification.md.
         """
         # The numbers of parts of the P_i and Q_j, from any pair of patterns
         first_P, first_Q = next(iter(solution.coefficients))
@@ -136,9 +132,8 @@ class IdentitySolver:
         """
         The general solution of a linear system of (row, constant) equations,
         as a tuple of sympy expressions in free parameters x_0, x_1, ..., or
-        None if there is no solution. Solved modulo primes (see modular.py),
-        or with modular=False over the rationals by sympy.linsolve, which
-        gives the same result but is much slower.
+        None if there is no solution. Solved modulo primes, or with modular=False
+        over the rationals by sympy.linsolve, which is much slower.
         """
         logger.info('Solving linear system')
         if modular:
