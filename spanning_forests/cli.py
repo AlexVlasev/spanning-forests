@@ -20,14 +20,7 @@ from time import time
 from spanning_forests.aliases import AdjacencyMatrix, Marked, Shape, Term
 from spanning_forests.graph import Graph, complete_graph
 from spanning_forests.identities import IdentitySolver
-from spanning_forests.relations import (
-    expand_product,
-    find_relations,
-    format_relation,
-    product_terms,
-    relation_counts,
-    relation_dimension,
-)
+from spanning_forests.relations import Marking, format_relation
 from spanning_forests.solution import Solution
 
 
@@ -66,19 +59,19 @@ def parse_product(spec: str) -> Term:
     return tuple(spec.split(','))
 
 
-def print_relations(graph: Graph, marked: Marked, args: argparse.Namespace) -> None:
+def print_relations(marking: Marking, args: argparse.Namespace) -> None:
     shapes = args.relations
     if args.new:
-        counts = relation_counts(graph, marked, shapes)
+        counts = marking.relation_counts(shapes)
         print(f'Products : {counts.products}')
         print(f'Dimension: {counts.dimension}')
         print(f'Inherited: {counts.inherited}')
         print(f'New      : {counts.new}')
     else:
-        print(f'Products : {len(product_terms(graph, marked, shapes))}')
-        print(f'Dimension: {relation_dimension(graph, marked, shapes)}')
+        print(f'Products : {len(marking.product_terms(shapes))}')
+        print(f'Dimension: {marking.relation_dimension(shapes)}')
     if args.show_relations:
-        for i, relation in enumerate(find_relations(graph, marked, shapes), 1):
+        for i, relation in enumerate(marking.find_relations(shapes), 1):
             print(f'\nRelation {i}:\n{format_relation(relation)}')
 
 
@@ -86,7 +79,7 @@ def print_sweep(marked: Marked, shapes: list[Shape], largest: int) -> None:
     """The counts on each complete graph that contains the marked vertices, up to K_largest."""
     print(f'{"Graph":<6}{"Products":>10}{"Dimension":>11}{"Inherited":>11}{"New":>7}')
     for n in range(max(marked) + 1, largest + 1):
-        counts = relation_counts(Graph(complete_graph(n)), marked, shapes)
+        counts = Marking(Graph(complete_graph(n)), marked).relation_counts(shapes)
         print(
             f'{"K" + str(n):<6}{counts.products:>10}{counts.dimension:>11}'
             f'{counts.inherited:>11}{counts.new:>7}',
@@ -213,8 +206,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.relations is not None:
         try:
             if args.product is not None:
-                solution = expand_product(
-                    Graph(args.graph), marked, args.product, args.relations, verify=args.verify
+                solution = Marking(Graph(args.graph), marked).expand_product(
+                    args.product, args.relations, verify=args.verify
                 )
                 print_solution(solution)
                 print(f'\nComputation took: {time() - start:.2f} sec')
@@ -222,7 +215,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.sweep is not None:
                 print_sweep(marked, args.relations, args.sweep)
             else:
-                print_relations(Graph(args.graph), marked, args)
+                print_relations(Marking(Graph(args.graph), marked), args)
         except ValueError as error:
             parser.error(str(error))
         print(f'\nComputation took: {time() - start:.2f} sec')

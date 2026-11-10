@@ -54,6 +54,18 @@ print(solution.report())
 print(solution.identity())
 ```
 
+A `Marking` holds a graph and its marked vertices, for the relations between products of any number of forest polynomials:
+
+```python
+from spanning_forests import Graph, Marking, complete_graph
+
+marking = Marking(Graph(complete_graph(6)), [0, 1, 2, 3])
+
+marking.relation_counts([(2, 3)])  # RelationCounts(products=42, dimension=8, inherited=0, new=8)
+marking.find_relations([(2, 3)])   # a basis of the relations, with coprime integer coefficients
+marking.expand_product(('1111', '1234', '1234'), [(3, 3, 3)], verify=True)  # a Solution
+```
+
 `solve_problem` returns a `Solution`, or `None` if there is no identity. `report()` lists each coefficient as free, fixed (a nonzero constant), dependent (determined by the free ones) or forbidden (always 0), along with a count of each, and `identity()` writes out the identity in terms of the partitions.
 
 ## Results so far
@@ -142,7 +154,7 @@ The sizes involved grow combinatorially, both in the graph and in the number of 
 - `spanning_forests/`: the package. Everything meant to be used from Python can be imported from it directly.
   - `graph.py`: the `Graph` class, with its spanning trees, tree and graph polynomials, and spanning forest polynomials.
   - `identities.py`: the `IdentitySolver`, which searches for identities numerically and verifies them symbolically.
-  - `relations.py`: the dimension of the space of linear relations between products of forest polynomials with fixed numbers of parts, and the expansion of a fixed product in such products, inspired by the spaces of spanning forest identities in (Choi and Yeats, 2026[^choi2026]).
+  - `relations.py`: the `Marking` class, with the dimension of the space of linear relations between products of forest polynomials with fixed numbers of parts, and the expansion of a fixed product in such products, inspired by the spaces of spanning forest identities in (Choi and Yeats, 2026[^choi2026]).
   - `solution.py`: the `Solution` class for a family of identities between products, with its report.
   - `polynomial.py`: `MultilinearPolynomial`, which stores each monomial as a bitmask of its edges and is used for all spanning forest polynomials, and a general `Polynomial` class for display.
   - `aliases.py`: type aliases shared by the modules.

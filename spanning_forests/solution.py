@@ -1,6 +1,6 @@
 """
 Families of identities between products of spanning forest polynomials, as
-found by IdentitySolver and relations.expand_product.
+found by IdentitySolver and Marking.expand_product.
 """
 
 from collections.abc import Iterable, Mapping, Sequence
