@@ -139,6 +139,7 @@ The sizes involved grow combinatorially, both in the graph and in the number of 
 - `evaluation.py`: the linear system from exact evaluations at random points, modulo a few primes, with the Chinese remainder theorem.
 - `equations.py`: the exact linear system from expanding every product, in chunks, with NumPy or pure Python.
 - `modular.py`: solves linear systems by row reduction modulo primes, recovering the exact rational solution.
+- `relations.py`: the dimension of the space of linear relations between products of forest polynomials with fixed numbers of parts, inspired by the spaces of spanning forest identities in (Choi and Yeats, 2026[^choi2026]).
 - `solution.py`: the `Solution` class for a family of identities, with its report.
 - `main.py`: the command line interface.
 - `polynomial.py`: `MultilinearPolynomial`, which stores each monomial as a bitmask of its edges and is used for all spanning forest polynomials, and a general `Polynomial` class for display.
@@ -151,3 +152,6 @@ The sizes involved grow combinatorially, both in the graph and in the number of 
 
 [^fraser2023]: Fraser, M., & Yeats, K. (2023). Column expansion identities and quadratic spanning forest identities. *Australasian Journal of Combinatorics*, 86, 271-307. 
   [![arXiv](https://img.shields.io/badge/arXiv-2109.13401-b31b1b.svg)](https://arxiv.org/abs/2109.13401) [![AJC](https://img.shields.io/badge/AJC-86-blue.svg)](https://ajc.maths.uq.edu.au/v86.p271)
+
+[^choi2026]: Choi, K., & Yeats, R. (2026). A framework for spanning forest identities. *arXiv preprint*. 
+  [![arXiv](https://img.shields.io/badge/arXiv-2610.14421-b31b1b.svg)](https://arxiv.org/abs/2610.14421)

@@ -13,6 +13,10 @@ CASES = [
 ]
 
 
+def test_more_parts_than_vertices_gives_no_polynomials():
+    assert Graph(GRAPHS['K4']).forest_polynomials([0, 1, 2], 5) == {}
+
+
 def assert_forest_polys_match(matrix, marked, num_trees):
     polys = Graph(matrix).forest_polynomials(marked, num_trees)
     actual = {pattern: monomials(poly) for pattern, poly in polys.items()}

@@ -178,6 +178,9 @@ class Graph:
         forests = []
         for removed in itertools.combinations(range(self.num_vertices - 1), num_parts - 1):
             forests.append(trees ^ bits[:, list(removed)].sum(axis=1, dtype=np.uint64))
+        # With more parts than vertices there are no edges to remove that way
+        if not forests:
+            return []
         return [int(forest) for forest in np.unique(np.concatenate(forests))]
 
     def forest_polynomial(self, marked, pattern):
