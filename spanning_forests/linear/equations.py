@@ -1,11 +1,6 @@
 """
-The exact linear system for the unknowns of an identity search,
-
-    phi_P * phi_Q = sum of c(P_i, Q_j) * phi_P_i * phi_Q_j
-
-from expanding every product of spanning forest polynomials, with one
-equation per monomial. Used to verify solutions symbolically. Products with
-any number of factors are handled by expansion_equations.
+Exact linear systems from expanding products of spanning forest polynomials,
+with one equation per monomial. See docs/verification.md.
 """
 
 import itertools
@@ -21,8 +16,7 @@ from spanning_forests.polynomial import MultilinearPolynomial
 if TYPE_CHECKING:
     from spanning_forests.identities import Problem
 
-# Monomial keys sum exponent * 3**e over edges e, and products of monomials
-# without squares have keys below 3**num_edges, which fits in a uint64 up to 40 edges
+# Keys of products of two polynomials fit in a uint64 up to this many edges
 MAX_NUMPY_EDGES = 40
 
 type KeyArrays = tuple[UIntArray, IntArray]
@@ -36,22 +30,10 @@ def exact_equations(
     problem: 'Problem', num_edges: int, chunk_edges: int = 8, use_numpy: bool = True
 ) -> set[Equation]:
     """
-    Builds the linear system for the unknowns c(P_i, Q_j) of a Problem, with
-    one equation per edge monomial, saying that its coefficients on both
-    sides agree. Each equation is returned as a pair (row, constant) where
-    row holds the coefficient of each unknown, in the order of
-    Problem.pairs, reduced by their gcd. Duplicates are dropped.
-
-    To limit memory, monomials are processed in chunks according to which
-    of the first chunk_edges edges they contain, and which of those are
-    squared. The product monomial (a | b, a & b) lands in the chunk
-    (x | y, x & y), where x and y are the parts of a and b on those edges,
-    so sorting the terms of every polynomial by that part lets each chunk
-    multiply only its own terms. Every pair of terms is still multiplied
-    exactly once.
-
-    Graphs with up to MAX_NUMPY_EDGES edges multiply with numpy, unless
-    use_numpy is False, and larger ones in pure Python.
+    The linear system for the unknowns c(P_i, Q_j) of a Problem, as distinct
+    (row, constant) equations, with rows in the order of Problem.pairs and
+    reduced by their gcd. Larger graphs than MAX_NUMPY_EDGES use pure Python.
+    See docs/verification.md for the chunking.
     """
     chunk_mask = (1 << min(chunk_edges, num_edges)) - 1
     use_numpy = use_numpy and num_edges <= MAX_NUMPY_EDGES
@@ -96,16 +78,10 @@ def expansion_equations(
     block_size: int = 2**24,
 ) -> set[Equation]:
     """
-    The exact linear system saying that the product of the polynomials in lhs
-    is a combination of products of polynomials, with one unknown for each
-    list of polynomials in terms. Equations have the form of exact_equations.
-
-    Monomials are keyed as in _bucket_arrays, in base one more than the
-    largest number of factors, which must fit in a uint64. Each product is
-    built one factor at a time, in blocks of block_size pairs of terms. The
-    arithmetic is exact: a ValueError is raised if a coefficient of a product
-    might not fit in an int64, which the sum of the absolute values of the
-    coefficients of its factors would bound.
+    The linear system saying that the product of the polynomials in lhs is a
+    combination of products of polynomials, with one unknown for each list in
+    terms, in the form of exact_equations. Raises a ValueError if the keys or
+    coefficients of a product might not fit in 64 bits.
     """
     base = max(len(lhs), *map(len, terms)) + 1 if terms else len(lhs) + 1
     if base**num_edges > 2**64:
@@ -208,9 +184,7 @@ def _bucket(terms: Terms, mask: int) -> Buckets:
 def _bucket_arrays(terms: Terms, num_edges: int, mask: int) -> ArrayBuckets:
     """
     Like _bucket, but each bucket holds numpy arrays of the monomial keys and
-    coefficients of its terms. The key of a monomial is the sum of
-    exponent * 3**e over its edges e, so the key of a product of two
-    monomials without squares is the sum of their keys.
+    coefficients of its terms.
     """
     masks = np.array([term_mask for term_mask, _ in terms], dtype=np.uint64)
     coeffs = np.array([coefficient for _, coefficient in terms], dtype=np.int64)
@@ -242,8 +216,6 @@ def _chunk_equations_numpy(
     The equations of exact_equations for the monomials in one chunk, from the
     buckets of _bucket_arrays, with dense rows.
     """
-    # Reduce each column to its distinct monomials before combining them, which
-    # keeps only one column's products in memory at a time
     keys, columns, coeffs = [], [], []
     for column, (buckets_a, buckets_b) in enumerate(buckets):
         column_keys, column_coeffs = [], []
@@ -275,9 +247,7 @@ def _equations_from_columns(
     The equations of exact_equations from arrays of the monomial keys and
     coefficients in each column, with the constant in column 0.
     """
-    # Sparse rows, as runs of (column, coefficient) entries grouped by monomial,
-    # with the constant in column 0, and the coefficient of unknown number k in
-    # column k + 1. Columns were added in order, so a stable sort keeps them sorted
+    # Columns were added in order, so a stable sort keeps them sorted within a monomial
     _, inverse = np.unique(np.concatenate(key_arrays), return_inverse=True)
     order = np.argsort(inverse.ravel(), kind='stable')
     monomials = inverse.ravel()[order]
@@ -311,9 +281,7 @@ def _unique_runs(
 ) -> Iterable[tuple[int, int]]:
     """
     The (start, length) of one representative of each distinct run of
-    (column, coefficient) entries. Runs are grouped by a hash, and kept as is
-    after checking that every run equals the representative of its group.
-    Otherwise, the runs are compared exactly instead.
+    (column, coefficient) entries, grouped by a hash and then checked exactly.
     """
     rng = np.random.default_rng(0)
     weights = rng.integers(1, 2**62, size=int(columns.max()) + 1, dtype=np.int64)
@@ -353,10 +321,8 @@ def _multiply_into(
     terms_b: Iterable[tuple[int, int]],
 ) -> None:
     """
-    Adds the product of two polynomials, given as (bitmask of edges,
-    coefficient) pairs, into product.
-    Each monomial of the product is identified by the pair
-    (a | b, a & b): its edges, and which of those are squared.
+    Adds the product of two polynomials, as (bitmask of edges, coefficient)
+    pairs, into product, keyed by the edges and which of those are squared.
     """
     for mask_a, coeff_a in terms_a:
         for mask_b, coeff_b in terms_b:

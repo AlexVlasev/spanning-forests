@@ -68,6 +68,14 @@ marking.expand_product(('1111', '1234', '1234'), [(3, 3, 3)], verify=True)  # a 
 
 `solve_problem` returns a `Solution`, or `None` if there is no identity. `report()` lists each coefficient as free, fixed (a nonzero constant), dependent (determined by the free ones) or forbidden (always 0), along with a count of each, and `identity()` writes out the identity in terms of the partitions.
 
+## Documentation
+
+Longer explanations of the trickier parts are in `docs/`:
+
+- [The modular solver](docs/modular-solver.md): how linear systems are solved exactly, and what the result guarantees.
+- [Relations between products](docs/relations.md): shapes, dimensions, inherited and new relations, and expanding a fixed product.
+- [Verification by expansion](docs/verification.md): monomial keys, chunking, and exact arithmetic.
+
 ## Results so far
 
 ### Three marked vertices
@@ -163,6 +171,7 @@ The sizes involved grow combinatorially, both in the graph and in the number of 
     - `evaluation.py`: the linear system from exact evaluations at random points, modulo a few primes, with the Chinese remainder theorem.
     - `equations.py`: the exact linear system from expanding every product, in chunks, with NumPy or pure Python.
     - `modular.py`: solves linear systems by row reduction modulo primes, recovering the exact rational solution.
+- `docs/`: longer explanations of the trickier parts.
 - `tests/`: checks against brute-force forest enumeration, known identities, and the matrix-tree theorem.
 
 ## References

@@ -1,13 +1,6 @@
 """
-The spaces of linear relations
-
-    sum of c(A_1, ..., A_r) * phi_A_1 * ... * phi_A_r = 0
-
-between products of spanning forest polynomials, where each product has a
-shape: the multiset of the numbers of parts of its partitions. Products are
-unordered, since the factors commute. Unlike the identities of identities.py
-there is no fixed left hand side, except in Marking.expand_product, which
-allows any number of factors.
+The linear relations between products of spanning forest polynomials, with
+any number of factors. See docs/relations.md.
 """
 
 import itertools
@@ -53,11 +46,7 @@ class Marking:
     def products(self, shapes: Sequence[Shape]) -> list[Product]:
         """
         Every distinct product with one of the shapes, as a tuple of patterns.
-        Partitions with no spanning forests on the graph are left out.
-
-        Shapes may be mixed, but need the same number of factors and the same
-        total number of parts, since otherwise the degrees of the products could
-        only agree on graphs of one size.
+        Shapes may be mixed, with the same number of factors and total parts.
         """
         shapes = sorted({tuple(sorted(shape)) for shape in shapes})
         _check_shapes(shapes)
@@ -76,11 +65,7 @@ class Marking:
     def relation_dimension(self, shapes: Sequence[Shape]) -> int:
         """
         The dimension of the space of relations on the graph between all
-        products with the given shapes, from the method products.
-
-        This is the number of products minus the rank of a matrix with one row
-        per random point. The rank is computed modulo a prime, so like the random
-        points, a degenerate choice could only make the dimension too large.
+        products with the given shapes, modulo a prime.
         """
         products = self.products(shapes)
         logger.info(f'Finding the relations between {len(products)} products')
@@ -93,13 +78,8 @@ class Marking:
     def relation_counts(self, shapes: Sequence[Shape]) -> RelationCounts:
         """
         The RelationCounts of a space of relations on the graph: how many of its
-        dimensions are inherited from fewer factors, as a relation with one
-        factor fewer multiplied by any forest polynomial, and how many are new.
-
-        Inheritance can pass through shapes outside the given ones, so inherited
-        relations are built among all shapes with the same number of factors and
-        total number of parts. All of the shapes must agree on those two numbers.
-        Everything is computed modulo a prime, as in relation_dimension.
+        dimensions are inherited from fewer factors and how many are new. The
+        shapes must have the same number of factors and total parts.
         """
         products = self.products(shapes)
         if not products:
@@ -121,14 +101,8 @@ class Marking:
 
     def find_relations(self, shapes: Sequence[Shape]) -> list[Relation]:
         """
-        A basis of the space of relations on the graph between all products with
-        the given shapes, from the method products. Each relation is a dict mapping
-        products to coprime integer coefficients, leaving out zeros, with the
-        first coefficient positive.
-
-        Each relation is exact for the equations from the random points, so like
-        relation_dimension, a degenerate choice of points could only add spurious
-        relations.
+        A basis of the relations on the graph between all products with the given
+        shapes, each a dict from products to coprime integer coefficients.
         """
         products = self.products(shapes)
         logger.info(f'Finding the relations between {len(products)} products')
@@ -156,16 +130,8 @@ class Marking:
 
             product of phi_A = sum of c(B) * (product of phi_B)
 
-        over every product B with the shapes, from random evaluations, as a
-        Solution keyed by those products, or None if there is none. The lhs
-        is a sequence of patterns, whose shape must have the same number of
-        factors and total number of parts as the shapes. With verify=True the
-        family is also confirmed by verify_expansion, and the result stored in
-        Solution.verified.
-
-        The unknowns are unordered products, unlike IdentitySolver.solve_problem,
-        so when two factors have the same number of parts its family is larger,
-        by the swaps of those factors.
+        over every product B with the shapes, as a Solution, or None if there is
+        none. With verify=True the family is also confirmed by verify_expansion.
         """
         lhs = tuple(lhs)
         for pattern in lhs:
@@ -190,9 +156,7 @@ class Marking:
     def verify_expansion(self, solution: Solution) -> bool:
         """
         Confirms exactly that every member of a family from expand_product is an
-        identity on the graph, by expanding every product into monomials. Each
-        coefficient is affine in the free parameters, so every equation must hold
-        separately for the constant part and for each parameter.
+        identity on the graph. See docs/verification.md.
         """
         polynomials = lambda patterns: [
             self.graph.forest_polynomial(self.marked, p) for p in patterns
@@ -238,8 +202,8 @@ class Marking:
 
     def _inherited(self, factors: int, total: int, index: dict[Product, int]) -> IntArray:
         """
-        The relations between the products in index that are a relation with one
-        factor fewer times a forest polynomial, one row per relation and polynomial.
+        The relations with one factor fewer times a forest polynomial, as one
+        row per relation and polynomial in the coordinates of index.
         """
         num_marked = len(self.marked)
         relation_rows: list[IntArray] = [np.zeros((0, len(index)), dtype=np.int64)]

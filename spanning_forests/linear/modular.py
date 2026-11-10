@@ -1,9 +1,5 @@
 """
-Solves linear systems by row reduction modulo primes, recovering the exact
-rational solution with the Chinese remainder theorem and rational
-reconstruction. Much faster than solving over the rationals, since the
-equations from evaluation.py have very large coefficients but their solutions
-usually have small ones.
+Solves linear systems by row reduction modulo primes. See docs/modular-solver.md.
 """
 
 import logging
@@ -30,13 +26,7 @@ def solve_modular(equations: Collection[Equation], num_vars: int) -> tuple[sym.E
     """
     The general solution of a linear system of (row, constant) equations, as
     a tuple of sympy expressions in free parameters x_0, x_1, ..., or None if
-    there is no solution. The same result as solving over the rationals with
-    sympy.linsolve.
-
-    A returned solution is checked exactly against the equations. The rank
-    modulo a prime is at most the rank over the rationals, so a family of
-    that dimension satisfying every equation is the whole solution set. That
-    there is no solution relies on NO_SOLUTION_PRIMES primes agreeing.
+    there is no solution. See docs/modular-solver.md for what this guarantees.
     """
     best, primes, residues = None, [], []
     for p in _primes():
@@ -44,7 +34,6 @@ def solve_modular(equations: Collection[Equation], num_vars: int) -> tuple[sym.E
         if best is None or _pivot_order(pivots) < _pivot_order(best):
             best, primes, residues = pivots, [], []
         elif pivots != best:
-            # An unlucky prime, which loses or moves a pivot
             continue
         primes.append(p)
         residues.append(reduced)
