@@ -7,8 +7,8 @@ import pytest
 import sympy
 
 from equations import _unique_runs
-from evaluation import crt, evaluate_all, evaluate_all_numpy
-from graph import complete_graph
+from evaluation import MAX_POINT, crt, evaluate_all, evaluate_all_numpy, random_points
+from graph import Graph, complete_graph
 from helpers import GRAPHS, adjacency, assert_identity, make_solver
 from modular import rational_reconstruction, reduced_row_echelon, solve_modular
 from polynomial import MultilinearPolynomial
@@ -159,6 +159,15 @@ def test_numpy_evaluation_with_negative_and_large_coefficients():
     assert evaluate_all_numpy(poly, points) == evaluate_all(poly, points)
     assert evaluate_all(poly, points)[0] == -3 * 2 + 10**30 * 6 - 10**25 + 7 + 6
     assert evaluate_all_numpy(MultilinearPolynomial(variables, {}), points) == [0, 0, 0]
+
+
+def test_numpy_evaluation_of_a_long_path_at_the_largest_coordinates():
+    # The single spanning tree has 40 edges, so its values have 800 bits
+    graph = Graph(adjacency(41, [(i, i + 1) for i in range(40)]))
+    points = [[MAX_POINT] * 40, *random_points(3, 40)]
+    values = evaluate_all_numpy(graph.tree_poly, points)
+    assert values == evaluate_all(graph.tree_poly, points)
+    assert values[0] == MAX_POINT**40
 
 
 def runs_of(columns, coeffs, runs):

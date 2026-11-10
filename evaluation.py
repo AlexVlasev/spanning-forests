@@ -14,13 +14,19 @@ import numpy as np
 
 from polynomial import edge_indices
 
-# Random points have coordinates from 1 to MAX_POINT
-MAX_POINT = 1000
+# Random points have coordinates from 1 to MAX_POINT. Each point fails to add an
+# independent equation with probability at most degree / MAX_POINT, whatever the
+# previous points were, by the Schwartz-Zippel lemma
+MAX_POINT = 2**20
 
 # The largest primes below 2**31, for evaluating modulo p, so that products of
 # two residues fit in an int64
 EVALUATION_PRIMES = [
-    2**31 - d for d in (1, 19, 61, 69, 85, 99, 105, 151, 159, 171, 225, 249, 295, 325, 379, 399)
+    2**31 - d
+    for d in (
+        1, 19, 61, 69, 85, 99, 105, 151, 159, 171, 225, 249, 295, 325, 379, 399,
+        411, 469, 477, 511, 525, 571, 579, 589, 595, 615, 619, 697, 699, 705, 711, 727,
+    )
 ]
 
 
@@ -38,7 +44,8 @@ def numeric_equations(problem, num_edges, extra_points=10, seed=0, use_numpy=Tru
 
     Each point gives a random combination of the exact equations, so with a
     few more points than unknowns both systems have the same solutions,
-    except with vanishingly small probability.
+    except with the small probability given in the README. A failure could
+    only add spurious solutions.
 
     With use_numpy, the polynomials are evaluated at all points at once,
     modulo a few primes, and the exact values recovered with the Chinese

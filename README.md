@@ -20,7 +20,7 @@ For a graph $G$ and a partition $P$ of some of its vertices (the marked vertices
 
 1. Enumerate the spanning trees of the graph directly. The search never includes an edge that would close a cycle and never excludes one that would disconnect the graph, so every branch ends in a tree.
 2. Get every spanning forest with $k$ trees by removing $k - 1$ edges from each tree. Group the forests by the partition they induce on the marked vertices.
-3. **Find** the identities by evaluating every polynomial exactly at random integer points. Each point gives one linear equation in the $a_{ij}$. Using a few more points than unknowns, row reduction modulo primes gives the full solution family, with probability 1. Its rational coefficients are recovered with the Chinese remainder theorem and rational reconstruction, then checked exactly against the equations. `--exact-solver` (or `modular=False`) uses `sympy.linsolve` instead, which gives the same result much more slowly.
+3. **Find** the identities by evaluating every polynomial exactly at random integer points. Each point gives one linear equation in the $a_{ij}$. Using a few more points than unknowns, row reduction modulo primes gives the full solution family, except with negligible probability (see Limitations). Its rational coefficients are recovered with the Chinese remainder theorem and rational reconstruction, then checked exactly against the equations. `--exact-solver` (or `modular=False`) uses `sympy.linsolve` instead, which gives the same result much more slowly.
 4. **Verify** (optional) by expanding every product symbolically and checking that the whole solution family satisfies the exact linear system. Monomials without squares are stored as bitmasks, so the product of $a$ and $b$ is the key `(a | b, a & b)`. With NumPy (up to 40 edges), a monomial is instead the integer $\sum_e \text{exponent}_e \cdot 3^e$, so the key of a product is the sum of the keys.
 
 ## Usage
@@ -83,9 +83,9 @@ For $P = 1\ldots1$ and $Q = 12\ldots m$ with the default partition sizes (two-pa
 
 | Marked vertices | Graph | Unknowns | Free | Dependent | Forbidden | Time | Time with `--exact-solver` |
 |---|---|---|---|---|---|---|---|
-| 5 | $K_7$ | 150 | 15 | 65 | 70 | 0.34 s | 65 s |
-| 6 | $K_7$ | 465 | 24 | 216 | 225 | 1.5 s | 3.3 hours |
-| 7 | $K_8$ | 1,323 | 35 | 637 | 651 | 40 s | not run |
+| 5 | $K_7$ | 150 | 15 | 65 | 70 | 0.46 s | 65 s |
+| 6 | $K_7$ | 465 | 24 | 216 | 225 | 1.8 s | 3.3 hours |
+| 7 | $K_8$ | 1,323 | 35 | 637 | 651 | 63 s | not run |
 
 These runs were numerical only, without symbolic verification.
 
@@ -99,9 +99,9 @@ Four-vertex search ($P$ = `1111`, $Q$ = `1234`) on $K_n$, on a Mac, with the def
 
 | Graph | Spanning trees | Build | Search | Verify | Peak memory |
 |---|---|---|---|---|---|
-| $K_5$ | 125 | < 0.01 s | 0.29 s | 0.13 s | 85 MB |
-| $K_6$ | 1,296 | 0.01 s | 0.35 s | 0.23 s | 90 MB |
-| $K_7$ | 16,807 | 0.09 s | 0.52 s | 1.5 s | 152 MB |
+| $K_5$ | 125 | < 0.01 s | 0.02 s | 0.13 s | 85 MB |
+| $K_6$ | 1,296 | 0.01 s | 0.03 s | 0.23 s | 90 MB |
+| $K_7$ | 16,807 | 0.09 s | 0.17 s | 1.5 s | 152 MB |
 | $K_8$ | 262,144 | 1.8 s | 3.2 s | 2.3 min | 3.7 GB |
 
 Verification multiplies every pair of terms (3.6 billion on $K_8$). Its cost across versions:
@@ -125,8 +125,8 @@ For comparison, the original version took about 8 s on the $K_6$ search and 40 s
 - **Shape of the identities.** Only identities $\Phi^P \Phi^Q = \sum c_{ij} \Phi^{P_i} \Phi^{Q_j}$ are searched, where all the $P_i$ have the same number of parts, and so do all the $Q_j$. The two choices of sizes are the default ($|P| + 1$ and $|Q| - 1$) and `balanced`. Other shapes, such as mixed sizes or products of three polynomials, are handled by `--product`.
 - **At most 9 parts.** Patterns label parts with single digits, so partitions with more than 9 parts are rejected. This limits the number of parts, not the number of vertices.
 - **Simple graphs.** Graphs are 0/1 adjacency matrices: undirected, without multiple edges, loops or edge weights. A disconnected graph has no spanning trees, so all its forest polynomials are empty.
-- **The search is probabilistic.** The random points use a fixed seed, so results are reproducible, and a wrong result would need a vanishingly unlikely degenerate choice of points. Use `--verify` to prove a family symbolically.
-- **NumPy paths have size limits.** Generating forests with NumPy needs at most 64 edges, and verification at most 40 ($K_9$ has 36). Larger graphs fall back to much slower pure Python. Verifying a `--product` has no such fallback, and needs (factors + 1) to the power of the number of edges to be at most $2^{64}$. It also stops with an error if a coefficient of an expanded product might not fit in 64 bits. Evaluation recovers values up to about $2^{490}$ from 16 primes, and raises an error beyond that.
+- **The search is probabilistic.** The random points use a fixed seed, so results are reproducible. A bad choice of points could only make a solution family or a space of relations too large, and it needs more than `extra_points` (10) of the points to be dependent. With $N$ unknowns, products of degree $D$ and coordinates up to $2^{20}$, the Schwartz-Zippel lemma bounds that chance by $\left(\frac{e (N + 10) D}{11 \cdot 2^{20}}\right)^{11}$, which is below $10^{-14}$ for $N = 10{,}000$ and $D = 20$. Use `--verify` to prove a family symbolically.
+- **NumPy paths have size limits.** Generating forests with NumPy needs at most 64 edges, and verification at most 40 ($K_9$ has 36). Larger graphs fall back to much slower pure Python. Verifying a `--product` has no such fallback, and needs (factors + 1) to the power of the number of edges to be at most $2^{64}$. It also stops with an error if a coefficient of an expanded product might not fit in 64 bits. Evaluation recovers values up to about $2^{990}$ from 32 primes, and raises an error beyond that.
 - **Single process.** Everything runs in one process and in memory. With `--exact-solver`, `sympy.linsolve` is fine for tens of unknowns but slow for hundreds.
 
 ### In practice
