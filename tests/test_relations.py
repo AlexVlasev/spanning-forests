@@ -6,6 +6,7 @@ import sympy
 from sympy.polys.domains import QQ
 from sympy.polys.matrices import DomainMatrix
 
+from equations import exact_equations, expansion_equations
 from evaluation import evaluate_all, random_points
 from graph import Graph, complete_graph
 from helpers import assert_identity, make_solver
@@ -17,7 +18,9 @@ from relations import (
     product_terms,
     relation_counts,
     relation_dimension,
+    verify_expansion,
 )
+from solution import Solution
 
 # Table 1 of Choi and Yeats: m, n, k, l, dimension of the relations on K_n
 TABLE_1 = [
@@ -142,6 +145,71 @@ def test_expand_product_needs_matching_degrees():
         expand_product(graph, [0, 1, 2], ('111', '123'), [(2, 3)])
     with pytest.raises(ValueError, match='same number of factors'):
         expand_product(graph, [0, 1, 2], ('111', '123'), [(1, 1, 2)])
+
+
+@pytest.mark.parametrize(
+    'n, m, product, shape, dimension',
+    [
+        (5, 3, ('111', '123'), (2, 2), 0),
+        (6, 4, ('1111', '1234'), (2, 3), 8),
+        (6, 4, ('1111', '1234', '1234'), (3, 3, 3), 0),
+        (5, 4, ('1111', '1123', '1234'), (2, 3, 3), 45),
+    ],
+)
+def test_verify_expansion(n, m, product, shape, dimension):
+    graph = Graph(complete_graph(n))
+    marked = list(range(m))
+    solution = expand_product(graph, marked, product, [shape], verify=True)
+    assert solution.dimension == dimension == relation_dimension(graph, marked, [shape])
+    assert solution.verified is True
+
+
+def tampered(solution, change):
+    """The solution with one nonzero coefficient changed by the given amount."""
+    term = next(t for t, c in solution.coefficients.items() if c != 0)
+    coefficients = solution.coefficients
+    return Solution(solution.product, {**coefficients, term: coefficients[term] + change})
+
+
+def test_verify_expansion_rejects_a_wrong_coefficient():
+    graph = Graph(complete_graph(5))
+    solution = expand_product(graph, [0, 1, 2, 3], ('1111', '1234'), [(2, 3)])
+    assert not verify_expansion(graph, [0, 1, 2, 3], tampered(solution, 1))
+
+
+def test_verify_expansion_checks_every_member_of_the_family():
+    # Correct when the new parameter is 0, and wrong for any other value
+    graph = Graph(complete_graph(5))
+    solution = expand_product(graph, [0, 1, 2, 3], ('1111', '1234'), [(2, 3)])
+    assert not verify_expansion(graph, [0, 1, 2, 3], tampered(solution, sympy.Symbol('y')))
+
+
+def test_verify_expansion_with_rational_coefficients():
+    graph = Graph(complete_graph(4))
+    product = ('111', '123')
+    terms = [('112', '121'), ('112', '122'), ('121', '122')]
+    half = sympy.Rational(1, 2)
+    good = Solution(product, {t: half + half for t in terms})
+    bad = Solution(product, {**{t: sympy.Integer(1) for t in terms}, terms[0]: half})
+    assert verify_expansion(graph, [0, 1, 2], good)
+    assert not verify_expansion(graph, [0, 1, 2], bad)
+
+
+def test_expansion_equations_agree_with_exact_equations():
+    solver = make_solver(complete_graph(5), [0, 1, 2, 3])
+    problem = solver.problem('1111', '1234', balanced=True)
+    rhs_P, rhs_Q = problem.rhs_P, problem.rhs_Q
+    terms = [[rhs_P[p], rhs_Q[q]] for p, q in problem.pairs]
+    lhs = [problem.phi_P, problem.phi_Q]
+    expected = exact_equations(problem, solver.graph.num_edges)
+    assert expansion_equations(lhs, terms, solver.graph.num_edges) == expected
+    assert expansion_equations(lhs, terms, solver.graph.num_edges, block_size=1) == expected
+
+
+def test_expansion_equations_reject_keys_too_large():
+    poly = Graph(complete_graph(3)).forest_polynomial([0, 1, 2], '111')
+    with pytest.raises(ValueError, match='too many edges'):
+        expansion_equations([poly, poly], [[poly, poly]], 41)
 
 
 def test_shapes_are_multisets():

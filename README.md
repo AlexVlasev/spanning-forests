@@ -37,7 +37,7 @@ The command line takes the partitions $P$ and $Q$ as patterns, a graph as `K<n>`
 
 With `--relations`, it instead takes one or more shapes and prints the dimension of the space of linear relations between all products of forest polynomials with those shapes. A shape lists the number of parts of each factor, so `2,2,3` is a product of three forest polynomials. Mixed shapes need the same number of factors and the same total number of parts. `--show-relations` also prints a basis of the relations, with coprime integer coefficients. `--new` splits the dimension into relations inherited from fewer factors, which are a relation with one factor fewer times any forest polynomial, and new ones. `--sweep N` prints these counts on complete graphs up to $K_N$, in place of `--graph`.
 
-With `--relations` and `--product`, it expands a fixed product of any number of factors in the products with the given shapes, and prints the solution family and identity as for $P$ and $Q$. For example, `--relations 3,3,3 --product 1111,1234,1234 --marked 0,1,2,3 --graph K6` writes a product of three forest polynomials in terms of three-part partitions. Products are unordered here, so when two factors on the right have the same number of parts, the family is smaller than the one from $P$ and $Q$ by the swaps of those factors. Otherwise the two searches give the same family.
+With `--relations` and `--product`, it expands a fixed product of any number of factors in the products with the given shapes, and prints the solution family and identity as for $P$ and $Q$. For example, `--relations 3,3,3 --product 1111,1234,1234 --marked 0,1,2,3 --graph K6` writes a product of three forest polynomials in terms of three-part partitions. Products are unordered here, so when two factors on the right have the same number of parts, the family is smaller than the one from $P$ and $Q$ by the swaps of those factors. Otherwise the two searches give the same family. `--verify` proves the family by expanding every product into monomials, as for $P$ and $Q$.
 
 From Python:
 
@@ -122,11 +122,11 @@ For comparison, the original version took about 8 s on the $K_6$ search and 40 s
 
 ### Of the code
 
-- **Shape of the identities.** Only identities $\Phi^P \Phi^Q = \sum c_{ij} \Phi^{P_i} \Phi^{Q_j}$ are searched, where all the $P_i$ have the same number of parts, and so do all the $Q_j$. The two choices of sizes are the default ($|P| + 1$ and $|Q| - 1$) and `balanced`. Other shapes, such as mixed sizes or products of three polynomials, are handled by `--product`, which has no symbolic `--verify` yet.
+- **Shape of the identities.** Only identities $\Phi^P \Phi^Q = \sum c_{ij} \Phi^{P_i} \Phi^{Q_j}$ are searched, where all the $P_i$ have the same number of parts, and so do all the $Q_j$. The two choices of sizes are the default ($|P| + 1$ and $|Q| - 1$) and `balanced`. Other shapes, such as mixed sizes or products of three polynomials, are handled by `--product`.
 - **At most 9 parts.** Patterns label parts with single digits, so partitions with more than 9 parts are rejected. This limits the number of parts, not the number of vertices.
 - **Simple graphs.** Graphs are 0/1 adjacency matrices: undirected, without multiple edges, loops or edge weights. A disconnected graph has no spanning trees, so all its forest polynomials are empty.
 - **The search is probabilistic.** The random points use a fixed seed, so results are reproducible, and a wrong result would need a vanishingly unlikely degenerate choice of points. Use `--verify` to prove a family symbolically.
-- **NumPy paths have size limits.** Generating forests with NumPy needs at most 64 edges, and verification at most 40 ($K_9$ has 36). Larger graphs fall back to much slower pure Python. Evaluation recovers values up to about $2^{490}$ from 16 primes, and raises an error beyond that.
+- **NumPy paths have size limits.** Generating forests with NumPy needs at most 64 edges, and verification at most 40 ($K_9$ has 36). Larger graphs fall back to much slower pure Python. Verifying a `--product` has no such fallback, and needs (factors + 1) to the power of the number of edges to be at most $2^{64}$. Evaluation recovers values up to about $2^{490}$ from 16 primes, and raises an error beyond that.
 - **Single process.** Everything runs in one process and in memory. With `--exact-solver`, `sympy.linsolve` is fine for tens of unknowns but slow for hundreds.
 
 ### In practice

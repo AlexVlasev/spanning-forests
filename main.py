@@ -179,8 +179,8 @@ def main(argv=None):
             parser.error('--relations needs --marked, and takes no P or Q')
         marked = args.marked
         if args.product is not None:
-            if args.show_relations or args.new or args.sweep is not None or args.verify:
-                parser.error('--product takes no --show-relations, --new, --sweep or --verify')
+            if args.show_relations or args.new or args.sweep is not None:
+                parser.error('--product takes no --show-relations, --new or --sweep')
             if any(len(pattern) != len(marked) for pattern in args.product):
                 parser.error('every pattern of --product needs one digit per marked vertex')
     else:
@@ -205,10 +205,12 @@ def main(argv=None):
     if args.relations is not None:
         try:
             if args.product is not None:
-                solution = expand_product(Graph(args.graph), marked, args.product, args.relations)
+                solution = expand_product(
+                    Graph(args.graph), marked, args.product, args.relations, verify=args.verify
+                )
                 print_solution(solution)
                 print(f'\nComputation took: {time() - start:.2f} sec')
-                return 0 if solution is not None else 1
+                return 0 if solution is not None and solution.verified is not False else 1
             if args.sweep is not None:
                 print_sweep(marked, args.relations, args.sweep)
             else:

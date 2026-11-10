@@ -4,7 +4,8 @@ The exact linear system for the unknowns of an identity search,
     phi_P * phi_Q = sum of c(P_i, Q_j) * phi_P_i * phi_Q_j
 
 from expanding every product of spanning forest polynomials, with one
-equation per monomial. Used to verify solutions symbolically.
+equation per monomial. Used to verify solutions symbolically. Products with
+any number of factors are handled by expansion_equations.
 """
 
 import itertools
@@ -65,6 +66,61 @@ def exact_equations(problem, num_edges, chunk_edges=8, use_numpy=True):
     return equations
 
 
+def expansion_equations(lhs, terms, num_edges, block_size=2**24):
+    """
+    The exact linear system saying that the product of the polynomials in lhs
+    is a combination of products of polynomials, with one unknown for each
+    list of polynomials in terms. Equations have the form of exact_equations.
+
+    Monomials are keyed as in _bucket_arrays, in base one more than the
+    largest number of factors, which must fit in a uint64. Each product is
+    built one factor at a time, in blocks of block_size pairs of terms.
+    """
+    base = max(len(lhs), *map(len, terms)) + 1 if terms else len(lhs) + 1
+    if base**num_edges > 2**64:
+        raise ValueError(f'too many edges to expand products of {base - 1} factors')
+
+    arrays = dict()
+    keys, columns, coeffs = [], [], []
+    for column, factors in enumerate([lhs, *terms]):
+        for poly in factors:
+            if id(poly) not in arrays:
+                arrays[id(poly)] = _key_arrays(poly, num_edges, base)
+        column_keys, column_coeffs = _expand_product(
+            sorted((arrays[id(poly)] for poly in factors), key=lambda a: len(a[0])), block_size
+        )
+        keys.append(column_keys)
+        coeffs.append(column_coeffs)
+        columns.append(np.full(len(column_keys), column, dtype=np.int64))
+    return _equations_from_columns(keys, columns, coeffs, len(terms))
+
+
+def _key_arrays(poly, num_edges, base):
+    """The numpy arrays of the monomial keys and coefficients of a polynomial."""
+    masks = np.array(list(poly.terms), dtype=np.uint64)
+    coeffs = np.array(list(poly.terms.values()), dtype=np.int64)
+    return _monomial_keys(masks, num_edges, base), coeffs
+
+
+def _expand_product(factors, block_size):
+    """The distinct monomial keys and coefficients of a product of (keys, coefficients)."""
+    keys = np.zeros(1, dtype=np.uint64)
+    coeffs = np.ones(1, dtype=np.int64)
+    for factor_keys, factor_coeffs in factors:
+        step = max(1, block_size // max(1, len(factor_keys)))
+        total_keys = np.zeros(0, dtype=np.uint64)
+        total_coeffs = np.zeros(0, dtype=np.int64)
+        for start in range(0, len(keys), step):
+            block_keys = np.add.outer(keys[start : start + step], factor_keys)
+            block_coeffs = np.multiply.outer(coeffs[start : start + step], factor_coeffs)
+            total_keys, total_coeffs = _sum_by_key(
+                np.concatenate((total_keys, block_keys.ravel())),
+                np.concatenate((total_coeffs, block_coeffs.ravel())),
+            )
+        keys, coeffs = total_keys, total_coeffs
+    return keys, coeffs
+
+
 def _chunk_equations(buckets, pairs):
     """
     The equations of exact_equations for the monomials in one chunk, with
@@ -121,9 +177,7 @@ def _bucket_arrays(terms, num_edges, mask):
     """
     masks = np.array([m for m, _ in terms], dtype=np.uint64)
     coeffs = np.array([c for _, c in terms], dtype=np.int64)
-    keys = np.zeros(len(terms), dtype=np.uint64)
-    for e in range(num_edges):
-        keys += ((masks >> np.uint64(e)) & np.uint64(1)) * np.uint64(3**e)
+    keys = _monomial_keys(masks, num_edges)
 
     ids = masks & np.uint64(mask)
     order = np.argsort(ids, kind='stable')
@@ -131,6 +185,14 @@ def _bucket_arrays(terms, num_edges, mask):
     values, starts = np.unique(ids, return_index=True)
     ends = [*starts[1:], len(ids)]
     return {int(v): (keys[s:e], coeffs[s:e]) for v, s, e in zip(values, starts, ends)}
+
+
+def _monomial_keys(masks, num_edges, base=3):
+    """The key of each monomial without squares, the sum of base**e over its edges e."""
+    keys = np.zeros(len(masks), dtype=np.uint64)
+    for e in range(num_edges):
+        keys += ((masks >> np.uint64(e)) & np.uint64(1)) * np.uint64(base**e)
+    return keys
 
 
 def _chunk_equations_numpy(buckets, pairs):
@@ -158,7 +220,14 @@ def _chunk_equations_numpy(buckets, pairs):
         columns.append(np.full(len(monomials), column, dtype=np.int64))
     if not keys:
         return set()
+    return _equations_from_columns(keys, columns, coeffs, len(buckets) - 1)
 
+
+def _equations_from_columns(keys, columns, coeffs, num_vars):
+    """
+    The equations of exact_equations from arrays of the monomial keys and
+    coefficients in each column, with the constant in column 0.
+    """
     # Sparse rows, as runs of (column, coefficient) entries grouped by monomial,
     # with the constant in column 0, and the coefficient of unknown number k in
     # column k + 1. Columns were added in order, so a stable sort keeps them sorted
@@ -176,7 +245,6 @@ def _chunk_equations_numpy(buckets, pairs):
     lengths = np.diff(np.append(starts, len(coeffs)))
     coeffs = coeffs // np.repeat(np.gcd.reduceat(np.abs(coeffs), starts), lengths)
 
-    num_vars = len(buckets) - 1
     equations = set()
     for start, length in _unique_runs(starts, lengths, columns, coeffs):
         row = [0] * num_vars

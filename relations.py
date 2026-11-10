@@ -13,10 +13,12 @@ number of factors.
 import itertools
 import logging
 import math
-from collections import Counter, namedtuple
+from collections import Counter, defaultdict, namedtuple
+from fractions import Fraction
 
 import numpy as np
 
+from equations import expansion_equations
 from evaluation import EVALUATION_PRIMES, evaluate_all_numpy, random_points
 from modular import reduced_row_echelon, solve_modular
 from solution import Solution
@@ -178,7 +180,7 @@ def find_relations(graph, marked, shapes, extra_points=10, seed=0):
     return [_primitive(relations[symbol]) for symbol in ordered]
 
 
-def expand_product(graph, marked, product, shapes, extra_points=10, seed=0):
+def expand_product(graph, marked, product, shapes, verify=False, extra_points=10, seed=0):
     """
     Finds the family of identities
 
@@ -187,7 +189,9 @@ def expand_product(graph, marked, product, shapes, extra_points=10, seed=0):
     over every term of product_terms for the shapes, from random evaluations,
     as a Solution keyed by those terms, or None if there is none. The product
     is a sequence of patterns, whose shape must have the same number of
-    factors and total number of parts as the shapes.
+    factors and total number of parts as the shapes. With verify=True the
+    family is also confirmed by verify_expansion, and the result stored in
+    Solution.verified.
 
     The unknowns are unordered products, unlike IdentitySolver.solve_problem,
     so when two factors have the same number of parts its family is larger,
@@ -202,7 +206,48 @@ def expand_product(graph, marked, product, shapes, extra_points=10, seed=0):
 
     points = random_points(len(terms) + extra_points, graph.num_edges, seed)
     values = solve_modular(_exact_equations(graph, marked, terms, points, product), len(terms))
-    return None if values is None else Solution(product, dict(zip(terms, values)))
+    if values is None:
+        return None
+
+    solution = Solution(product, dict(zip(terms, values)))
+    if verify:
+        # Can only fail if the random points were degenerate
+        solution.verified = verify_expansion(graph, marked, solution)
+    return solution
+
+
+def verify_expansion(graph, marked, solution):
+    """
+    Confirms exactly that every member of a family from expand_product is an
+    identity on the graph, by expanding every product into monomials. Each
+    coefficient is affine in the free parameters, so every equation must hold
+    separately for the constant part and for each parameter.
+    """
+    polynomials = lambda patterns: [graph.forest_polynomial(marked, p) for p in patterns]
+    terms = list(solution.coefficients)
+    logger.info(f'Verifying solution by expanding {len(terms) + 1} products')
+    equations = expansion_equations(
+        polynomials(solution.product), [polynomials(term) for term in terms], graph.num_edges
+    )
+
+    coefficients = [_affine_parts(solution.coefficients[term]) for term in terms]
+    for row, constant in equations:
+        totals = defaultdict(Fraction, {1: Fraction(-constant)})
+        for entry, parts in zip(row, coefficients):
+            if entry:
+                for symbol, value in parts.items():
+                    totals[symbol] += entry * value
+        if any(totals.values()):
+            return False
+    return True
+
+
+def _affine_parts(coefficient):
+    """An affine sympy expression as a dict from its symbols, and 1, to Fractions."""
+    return {
+        symbol: Fraction(int(value.p), int(value.q))
+        for symbol, value in coefficient.as_coefficients_dict().items()
+    }
 
 
 def format_relation(relation):
