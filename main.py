@@ -8,7 +8,7 @@ Examples:
     python main.py 11122 12345 --graph K6
     python main.py 111 123 --graph 0-1,1-2,2-3,3-0,0-2 --marked 0,1,3
     python main.py --relations 2,2,3 --marked 0,1,2,3 --graph K6
-    python main.py --relations 1,3 2,2 --marked 0,1,2 --graph K5
+    python main.py --relations 1,3 2,2 --marked 0,1,2 --graph K5 --show-relations
 """
 
 import argparse
@@ -18,7 +18,7 @@ from time import time
 
 from graph import Graph, complete_graph
 from identities import IdentitySolver
-from relations import product_terms, relation_dimension
+from relations import find_relations, format_relation, product_terms, relation_dimension
 
 
 def parse_graph(spec):
@@ -97,6 +97,11 @@ def main(argv=None):
         help='instead of P and Q, the dimension of the relations between all products '
         'with these numbers of parts, like 2,3 or 2,2,3 (needs --marked)',
     )
+    parser.add_argument(
+        '--show-relations',
+        action='store_true',
+        help='with --relations, also print a basis of the relations (slower)',
+    )
     parser.add_argument('-q', '--quiet', action='store_true', help='hide progress messages')
     args = parser.parse_args(argv)
 
@@ -107,6 +112,8 @@ def main(argv=None):
     else:
         if args.P is None or args.Q is None:
             parser.error('expected P and Q, or --relations')
+        if args.show_relations:
+            parser.error('--show-relations needs --relations')
         marked = args.marked if args.marked is not None else list(range(len(args.P)))
         if not len(args.P) == len(args.Q) == len(marked):
             parser.error('P, Q and the marked vertices must have the same length')
@@ -122,7 +129,13 @@ def main(argv=None):
         graph = Graph(args.graph)
         try:
             print(f'Products : {len(product_terms(graph, marked, args.relations))}')
-            print(f'Dimension: {relation_dimension(graph, marked, args.relations)}')
+            if args.show_relations:
+                relations = find_relations(graph, marked, args.relations)
+                print(f'Dimension: {len(relations)}')
+                for i, relation in enumerate(relations, 1):
+                    print(f'\nRelation {i}:\n{format_relation(relation)}')
+            else:
+                print(f'Dimension: {relation_dimension(graph, marked, args.relations)}')
         except ValueError as error:
             parser.error(str(error))
         print(f'\nComputation took: {time() - start:.2f} sec')

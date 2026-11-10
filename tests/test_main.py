@@ -64,10 +64,21 @@ def test_main_with_mixed_shapes(capsys):
     assert 'Dimension: 1' in capsys.readouterr().out
 
 
+def test_main_shows_relations(capsys):
+    args = ['--relations', '1,3', '2,2', '--marked', '0,1,2', '--show-relations', '-q']
+    assert main(args) == 0
+    out = capsys.readouterr().out
+    assert 'Dimension: 1' in out
+    assert 'Relation 1:' in out
+    assert '+ 1 * phi_111 * phi_123' in out
+    assert '- 1 * phi_112 * phi_121' in out
+
+
 @pytest.mark.parametrize(
     'args',
     [
         [],  # neither P and Q nor relations
+        ['111', '123', '--show-relations'],  # showing relations without relations
         ['111'],  # P without Q
         ['--relations', '2,3'],  # relations without marked vertices
         ['111', '--relations', '2,3', '--marked', '0,1,2'],  # relations with P

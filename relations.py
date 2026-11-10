@@ -11,12 +11,13 @@ are unordered, since the factors commute.
 
 import itertools
 import logging
+import math
 from collections import Counter
 
 import numpy as np
 
 from evaluation import EVALUATION_PRIMES, evaluate_all_numpy, random_points
-from modular import reduced_row_echelon
+from modular import reduced_row_echelon, solve_modular
 
 logger = logging.getLogger(__name__)
 
@@ -65,9 +66,72 @@ def relation_dimension(graph, marked, shapes, extra_points=10, seed=0):
     return len(terms) - len(pivots)
 
 
+def find_relations(graph, marked, shapes, extra_points=10, seed=0):
+    """
+    A basis of the space of relations on a graph between all products with
+    the given shapes, from product_terms. Each relation is a dict mapping
+    products to coprime integer coefficients, leaving out zeros, with the
+    first coefficient positive.
+
+    Each relation is exact for the equations from the random points, so like
+    relation_dimension, a degenerate choice of points could only add spurious
+    relations.
+    """
+    terms = product_terms(graph, marked, shapes)
+    logger.info(f'Finding the relations between {len(terms)} products')
+    if not terms:
+        return []
+
+    points = random_points(len(terms) + extra_points, graph.num_edges, seed)
+    values = solve_modular(_exact_equations(graph, marked, terms, points), len(terms))
+
+    # Each free parameter of the solution gives one relation of the basis
+    relations = dict()
+    for term, value in zip(terms, values):
+        for symbol, coefficient in value.as_coefficients_dict().items():
+            if symbol.is_Symbol:
+                relations.setdefault(symbol, dict())[term] = coefficient
+    ordered = sorted(relations, key=lambda symbol: int(symbol.name.split('_')[1]))
+    return [_primitive(relations[symbol]) for symbol in ordered]
+
+
+def format_relation(relation):
+    """A relation from find_relations with one term per line, as printed by the command line."""
+    lines = []
+    for term, coefficient in relation.items():
+        product = ' * '.join(f'phi_{pattern}' for pattern in term)
+        lines.append(f'    {"+" if coefficient > 0 else "-"} {abs(coefficient)} * {product}')
+    return '\n'.join(lines)
+
+
+def _primitive(relation):
+    """A relation rescaled to coprime integer coefficients, with the first positive."""
+    denominator = math.lcm(*(c.q for c in relation.values()))
+    integers = {term: int(c * denominator) for term, c in relation.items()}
+    divisor = math.gcd(*integers.values())
+    if next(iter(integers.values())) < 0:
+        divisor = -divisor
+    return {term: c // divisor for term, c in integers.items()}
+
+
+def _patterns(terms):
+    return sorted(set(itertools.chain.from_iterable(terms)))
+
+
+def _exact_equations(graph, marked, terms, points):
+    """The (row, constant) equations, with exact values of the products at each point."""
+    values = {
+        p: evaluate_all_numpy(graph.forest_polynomial(marked, p), points) for p in _patterns(terms)
+    }
+    return [
+        (tuple(math.prod(values[p][i] for p in term) for term in terms), 0)
+        for i in range(len(points))
+    ]
+
+
 def _product_matrix(graph, marked, terms, points):
     """The (points, products) array of the values of the products modulo PRIME."""
-    patterns = sorted(set(itertools.chain.from_iterable(terms)))
+    patterns = _patterns(terms)
     index = {pattern: i for i, pattern in enumerate(patterns)}
     values = np.array(
         [

@@ -9,7 +9,7 @@ from sympy.polys.matrices import DomainMatrix
 from evaluation import evaluate_all, random_points
 from graph import Graph, complete_graph
 from helpers import make_solver
-from relations import product_terms, relation_dimension
+from relations import find_relations, format_relation, product_terms, relation_dimension
 
 # Table 1 of Choi and Yeats: m, n, k, l, dimension of the relations on K_n
 TABLE_1 = [
@@ -65,21 +65,24 @@ def test_no_products_means_no_relations():
     assert relation_dimension(graph, [0, 1, 2], [(2, 4)]) == 0
 
 
+def expand(graph, marked, term):
+    """A product of forest polynomials as a Counter of monomials, as tuples of powers."""
+    expansion = Counter({(0,) * graph.num_edges: 1})
+    for pattern in term:
+        factor = graph.forest_polynomial(marked, pattern)
+        next_expansion = Counter()
+        for powers, c in expansion.items():
+            for mask, d in factor.terms.items():
+                key = tuple(e + ((mask >> i) & 1) for i, e in enumerate(powers))
+                next_expansion[key] += c * d
+        expansion = next_expansion
+    return expansion
+
+
 def brute_force_dimension(graph, marked, shapes):
     """The dimension from expanding every product into monomials, over the rationals."""
     terms = product_terms(graph, marked, shapes)
-    expansions = []
-    for term in terms:
-        expansion = Counter({(0,) * graph.num_edges: 1})
-        for pattern in term:
-            factor = graph.forest_polynomial(marked, pattern)
-            next_expansion = Counter()
-            for powers, c in expansion.items():
-                for mask, d in factor.terms.items():
-                    key = tuple(e + ((mask >> i) & 1) for i, e in enumerate(powers))
-                    next_expansion[key] += c * d
-            expansion = next_expansion
-        expansions.append(expansion)
+    expansions = [expand(graph, marked, term) for term in terms]
 
     monomials = sorted(set().union(*expansions))
     matrix = sympy.Matrix([[e[monomial] for monomial in monomials] for e in expansions])
@@ -102,6 +105,59 @@ def test_sampling_agrees_with_expanding_every_product(m, n, shapes):
     graph = Graph(complete_graph(n))
     marked = list(range(m))
     assert relation_dimension(graph, marked, shapes) == brute_force_dimension(graph, marked, shapes)
+
+
+@pytest.mark.parametrize(
+    'm, n, shapes',
+    [
+        (3, 5, [(1, 3), (2, 2)]),
+        (4, 5, [(2, 3)]),
+        (4, 5, [(1, 4, 4), (3, 3, 3)]),
+        (4, 5, [(1, 1, 4), (2, 2, 2)]),
+        (4, 5, [(2, 2, 3)]),
+    ],
+)
+def test_found_relations_are_a_basis_of_exact_relations(m, n, shapes):
+    graph = Graph(complete_graph(n))
+    marked = list(range(m))
+    relations = find_relations(graph, marked, shapes)
+    assert len(relations) == relation_dimension(graph, marked, shapes)
+
+    terms = product_terms(graph, marked, shapes)
+    assert sympy.Matrix([[r.get(t, 0) for t in terms] for r in relations]).rank() == len(relations)
+
+    for relation in relations:
+        total = Counter()
+        for term, coefficient in relation.items():
+            for monomial, c in expand(graph, marked, term).items():
+                total[monomial] += coefficient * c
+        assert not any(total.values())
+
+        coefficients = list(relation.values())
+        assert all(isinstance(c, int) and c != 0 for c in coefficients)
+        assert coefficients[0] > 0
+        assert math.gcd(*coefficients) == 1
+
+
+def test_find_relations_gives_the_dodgson_identity():
+    graph = Graph(complete_graph(5))
+    assert find_relations(graph, [0, 1, 2], [(1, 3), (2, 2)]) == [
+        {
+            ('111', '123'): 1,
+            ('112', '121'): -1,
+            ('112', '122'): -1,
+            ('121', '122'): -1,
+        }
+    ]
+
+
+def test_find_relations_without_products():
+    assert find_relations(Graph(complete_graph(5)), [0, 1, 2], [(2, 4)]) == []
+
+
+def test_format_relation():
+    relation = {('111', '123'): 1, ('112', '121'): -2}
+    assert format_relation(relation) == '    + 1 * phi_111 * phi_123\n    - 2 * phi_112 * phi_121'
 
 
 def test_product_terms_are_distinct_and_unordered():
