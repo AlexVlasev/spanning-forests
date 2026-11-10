@@ -7,6 +7,8 @@ Examples:
     python main.py 1111 1234 --graph K6 --balanced --verify
     python main.py 11122 12345 --graph K6
     python main.py 111 123 --graph 0-1,1-2,2-3,3-0,0-2 --marked 0,1,3
+    python main.py --relations 2,2,3 --marked 0,1,2,3 --graph K6
+    python main.py --relations 1,3 2,2 --marked 0,1,2 --graph K5
 """
 
 import argparse
@@ -16,6 +18,7 @@ from time import time
 
 from graph import Graph, complete_graph
 from identities import IdentitySolver
+from relations import product_terms, relation_dimension
 
 
 def parse_graph(spec):
@@ -42,6 +45,13 @@ def parse_vertices(spec):
         raise argparse.ArgumentTypeError(f'expected vertices like 0,1,2, got {spec!r}')
 
 
+def parse_shape(spec):
+    try:
+        return tuple(int(parts) for parts in spec.split(','))
+    except ValueError:
+        raise argparse.ArgumentTypeError(f'expected numbers of parts like 2,3, got {spec!r}')
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(
         description='Search for identities '
@@ -49,8 +59,12 @@ def main(argv=None):
         'between spanning forest polynomials.',
         epilog='Partitions are patterns with one digit per marked vertex, e.g. 1213.',
     )
-    parser.add_argument('P', help='partition of the marked vertices in the first factor')
-    parser.add_argument('Q', help='partition of the marked vertices in the second factor')
+    parser.add_argument(
+        'P', nargs='?', help='partition of the marked vertices in the first factor'
+    )
+    parser.add_argument(
+        'Q', nargs='?', help='partition of the marked vertices in the second factor'
+    )
     parser.add_argument(
         '-g',
         '--graph',
@@ -75,12 +89,27 @@ def main(argv=None):
         action='store_true',
         help='solve over the rationals with sympy instead of modulo primes (slow)',
     )
+    parser.add_argument(
+        '--relations',
+        nargs='+',
+        type=parse_shape,
+        metavar='SHAPE',
+        help='instead of P and Q, the dimension of the relations between all products '
+        'with these numbers of parts, like 2,3 or 2,2,3 (needs --marked)',
+    )
     parser.add_argument('-q', '--quiet', action='store_true', help='hide progress messages')
     args = parser.parse_args(argv)
 
-    marked = args.marked if args.marked is not None else list(range(len(args.P)))
-    if not len(args.P) == len(args.Q) == len(marked):
-        parser.error('P, Q and the marked vertices must have the same length')
+    if args.relations is not None:
+        if args.P is not None or args.marked is None:
+            parser.error('--relations needs --marked, and takes no P or Q')
+        marked = args.marked
+    else:
+        if args.P is None or args.Q is None:
+            parser.error('expected P and Q, or --relations')
+        marked = args.marked if args.marked is not None else list(range(len(args.P)))
+        if not len(args.P) == len(args.Q) == len(marked):
+            parser.error('P, Q and the marked vertices must have the same length')
     if max(marked) >= len(args.graph):
         parser.error(f'the graph has no vertex {max(marked)}')
 
@@ -89,6 +118,16 @@ def main(argv=None):
     logging.basicConfig(format='%(message)s', level=level, force=True)
 
     start = time()
+    if args.relations is not None:
+        graph = Graph(args.graph)
+        try:
+            print(f'Products : {len(product_terms(graph, marked, args.relations))}')
+            print(f'Dimension: {relation_dimension(graph, marked, args.relations)}')
+        except ValueError as error:
+            parser.error(str(error))
+        print(f'\nComputation took: {time() - start:.2f} sec')
+        return 0
+
     solver = IdentitySolver(Graph(args.graph), marked)
     solution = solver.solve_problem(
         args.P,

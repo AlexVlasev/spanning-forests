@@ -4,7 +4,7 @@ import pytest
 
 from graph import complete_graph
 from helpers import adjacency
-from main import main, parse_graph, parse_vertices
+from main import main, parse_graph, parse_shape, parse_vertices
 
 
 def test_parse_graph():
@@ -45,9 +45,33 @@ def test_main_with_exact_solver(capsys):
     assert 'Dimension: 3' in capsys.readouterr().out
 
 
+def test_parse_shape():
+    assert parse_shape('2,3') == (2, 3)
+    assert parse_shape('2,2,3') == (2, 2, 3)
+    with pytest.raises(argparse.ArgumentTypeError):
+        parse_shape('2,x')
+
+
+def test_main_with_relations(capsys):
+    assert main(['--relations', '2,3', '--marked', '0,1,2,3', '--graph', 'K5', '-q']) == 0
+    out = capsys.readouterr().out
+    assert 'Products : 42' in out
+    assert 'Dimension: 8' in out
+
+
+def test_main_with_mixed_shapes(capsys):
+    assert main(['--relations', '1,3', '2,2', '--marked', '0,1,2', '-q']) == 0
+    assert 'Dimension: 1' in capsys.readouterr().out
+
+
 @pytest.mark.parametrize(
     'args',
     [
+        [],  # neither P and Q nor relations
+        ['111'],  # P without Q
+        ['--relations', '2,3'],  # relations without marked vertices
+        ['111', '--relations', '2,3', '--marked', '0,1,2'],  # relations with P
+        ['--relations', '2,2', '2,3', '--marked', '0,1,2'],  # degrees that do not match
         ['111', '1234'],  # P and Q of different lengths
         ['111', '123', '--marked', '0,1'],  # wrong number of marked vertices
         ['111', '123', '--graph', 'K3', '--marked', '0,1,5'],  # vertex not in the graph
