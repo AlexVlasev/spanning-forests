@@ -178,11 +178,15 @@ def main(argv=None):
         if args.P is not None or args.marked is None:
             parser.error('--relations needs --marked, and takes no P or Q')
         marked = args.marked
+        if args.balanced or args.exact_solver:
+            parser.error('--balanced and --exact-solver need P and Q')
         if args.product is not None:
             if args.show_relations or args.new or args.sweep is not None:
                 parser.error('--product takes no --show-relations, --new or --sweep')
             if any(len(pattern) != len(marked) for pattern in args.product):
                 parser.error('every pattern of --product needs one digit per marked vertex')
+        elif args.verify:
+            parser.error('--verify needs P and Q, or --product')
     else:
         if args.P is None or args.Q is None:
             parser.error('expected P and Q, or --relations')

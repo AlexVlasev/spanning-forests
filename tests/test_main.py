@@ -132,6 +132,11 @@ def test_main_without_an_expansion(capsys):
         ['--relations', '1,3', '--product', '11,12', '--marked', '0,1,2'],  # patterns too short
         ['--relations', '2,2', '--product', '111,123', '--marked', '0,1,2', '--new'],
         ['--relations', '2,2', '--marked', '0,1,2', '--product', '111,123', '--sweep', '5'],
+        ['--relations', '2,3', '--marked', '0,1,2,3', '--verify'],  # nothing to verify
+        ['--relations', '2,3', '--marked', '0,1,2,3', '--exact-solver'],  # always modular
+        ['--relations', '2,3', '--marked', '0,1,2,3', '--balanced'],  # shapes are given
+        ['--relations', '1,3', '--product', '111,123', '--marked', '0,1,2', '--exact-solver'],
+        ['--relations', '1,3', '--product', '111,123', '--marked', '0,1,2', '--balanced'],
         ['2111', '1234'],  # P not in standard form
         ['1111', '1324', '--verify'],  # Q not in standard form
         ['123', '111', '--graph', 'K4'],  # no partition into 0 parts for the Q_j

@@ -20,7 +20,7 @@ import numpy as np
 
 from equations import expansion_equations
 from evaluation import EVALUATION_PRIMES, evaluate_all_numpy, random_points
-from graph import check_pattern
+from graph import MAX_PARTS, check_pattern
 from modular import reduced_row_echelon, solve_modular
 from solution import Solution
 
@@ -78,9 +78,16 @@ def relation_dimension(graph, marked, shapes, extra_points=10, seed=0):
 
 
 def all_shapes(num_marked, factors, total):
-    """Every shape with this many factors and total number of parts, for num_marked vertices."""
-    parts = range(1, num_marked + 1)
+    """
+    Every shape with this many factors and total number of parts, for
+    num_marked vertices, within the MAX_PARTS parts that patterns can label.
+    """
+    parts = _part_counts(num_marked)
     return [s for s in itertools.combinations_with_replacement(parts, factors) if sum(s) == total]
+
+
+def _part_counts(num_marked):
+    return range(1, min(num_marked, MAX_PARTS) + 1)
 
 
 def relation_counts(graph, marked, shapes, extra_points=10, seed=0):
@@ -133,7 +140,7 @@ def _inherited(graph, marked, factors, total, index, extra_points, seed):
     factor fewer times a forest polynomial, one row per relation and polynomial.
     """
     rows = [np.zeros((0, len(index)), dtype=np.int64)]
-    for parts in range(1, len(marked) + 1):
+    for parts in _part_counts(len(marked)):
         if factors == 1:
             break
         lower = product_terms(graph, marked, all_shapes(len(marked), factors - 1, total - parts))

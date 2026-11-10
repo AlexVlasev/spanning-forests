@@ -9,7 +9,7 @@ from sympy.polys.matrices import DomainMatrix
 from equations import exact_equations, expansion_equations
 from evaluation import evaluate_all, random_points
 from graph import Graph, complete_graph
-from helpers import assert_identity, make_solver
+from helpers import adjacency, assert_identity, make_solver
 from relations import (
     all_shapes,
     expand_product,
@@ -413,6 +413,24 @@ def test_relation_counts_without_products():
 def test_all_shapes():
     assert all_shapes(4, 3, 9) == [(1, 4, 4), (2, 3, 4), (3, 3, 3)]
     assert all_shapes(4, 1, 5) == []
+
+
+def test_all_shapes_stay_within_the_parts_that_patterns_can_label():
+    assert all_shapes(10, 2, 18) == [(9, 9)]
+    assert all_shapes(10, 1, 10) == []
+
+
+def path_graph(n):
+    return Graph(adjacency(n, [(i, i + 1) for i in range(n - 1)]))
+
+
+@pytest.mark.parametrize('shape', [(9, 9), (9, 9, 9)])
+def test_relation_counts_with_more_marked_vertices_than_parts(shape):
+    # Lower degrees would include partitions into 10 parts
+    graph = path_graph(10)
+    counts = relation_counts(graph, list(range(10)), [shape])
+    assert counts.dimension == relation_dimension(graph, list(range(10)), [shape])
+    assert counts.new + counts.inherited == counts.dimension
 
 
 def test_product_terms_are_distinct_and_unordered():
