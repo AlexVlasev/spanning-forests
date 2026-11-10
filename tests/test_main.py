@@ -74,11 +74,33 @@ def test_main_shows_relations(capsys):
     assert '- 1 * phi_112 * phi_121' in out
 
 
+def test_main_splits_relations_into_inherited_and_new(capsys):
+    args = ['--relations', '2,3,4', '--marked', '0,1,2,3', '--new', '-q']
+    assert main(args) == 0
+    out = capsys.readouterr().out
+    assert 'Dimension: 8' in out
+    assert 'Inherited: 8' in out
+    assert 'New      : 0' in out
+
+
+def test_main_sweeps_complete_graphs(capsys):
+    assert main(['--relations', '1,3', '2,2', '--marked', '0,1,2', '--sweep', '5', '-q']) == 0
+    rows = [line.split() for line in capsys.readouterr().out.splitlines() if line.startswith('K')]
+    assert rows == [
+        ['K3', '7', '1', '0', '1'],
+        ['K4', '7', '1', '0', '1'],
+        ['K5', '7', '1', '0', '1'],
+    ]
+
+
 @pytest.mark.parametrize(
     'args',
     [
         [],  # neither P and Q nor relations
         ['111', '123', '--show-relations'],  # showing relations without relations
+        ['111', '123', '--new'],  # counting new relations without relations
+        ['111', '123', '--sweep', '5'],  # a sweep without relations
+        ['--relations', '2,2', '--marked', '0,1,2', '--sweep', '2'],  # a sweep that is too small
         ['111'],  # P without Q
         ['--relations', '2,3'],  # relations without marked vertices
         ['111', '--relations', '2,3', '--marked', '0,1,2'],  # relations with P

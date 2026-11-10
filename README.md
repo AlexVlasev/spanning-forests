@@ -35,7 +35,7 @@ pipenv run python main.py --help
 
 The command line takes the partitions $P$ and $Q$ as patterns, a graph as `K<n>` or an edge list like `0-1,1-2,2-0`, and optionally the marked vertices (by default the first `len(P)`). It prints the solution family and the identity in terms of the partitions.
 
-With `--relations`, it instead takes one or more shapes and prints the dimension of the space of linear relations between all products of forest polynomials with those shapes. A shape lists the number of parts of each factor, so `2,2,3` is a product of three forest polynomials. Mixed shapes need the same number of factors and the same total number of parts. `--show-relations` also prints a basis of the relations, with coprime integer coefficients.
+With `--relations`, it instead takes one or more shapes and prints the dimension of the space of linear relations between all products of forest polynomials with those shapes. A shape lists the number of parts of each factor, so `2,2,3` is a product of three forest polynomials. Mixed shapes need the same number of factors and the same total number of parts. `--show-relations` also prints a basis of the relations, with coprime integer coefficients. `--new` splits the dimension into relations inherited from fewer factors, which are a relation with one factor fewer times any forest polynomial, and new ones. `--sweep N` prints these counts on complete graphs up to $K_N$, in place of `--graph`.
 
 From Python:
 

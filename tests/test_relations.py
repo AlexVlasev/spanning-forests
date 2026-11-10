@@ -9,7 +9,14 @@ from sympy.polys.matrices import DomainMatrix
 from evaluation import evaluate_all, random_points
 from graph import Graph, complete_graph
 from helpers import make_solver
-from relations import find_relations, format_relation, product_terms, relation_dimension
+from relations import (
+    all_shapes,
+    find_relations,
+    format_relation,
+    product_terms,
+    relation_counts,
+    relation_dimension,
+)
 
 # Table 1 of Choi and Yeats: m, n, k, l, dimension of the relations on K_n
 TABLE_1 = [
@@ -158,6 +165,85 @@ def test_find_relations_without_products():
 def test_format_relation():
     relation = {('111', '123'): 1, ('112', '121'): -2}
     assert format_relation(relation) == '    + 1 * phi_111 * phi_123\n    - 2 * phi_112 * phi_121'
+
+
+def rational_rank(rows):
+    return DomainMatrix.from_Matrix(sympy.Matrix(rows)).convert_to(QQ).rank() if rows else 0
+
+
+def exact_new_dimension(graph, marked, shapes):
+    """The new relations, from exact bases of the relations, computed over the rationals."""
+    target = find_relations(graph, marked, shapes)
+    m, factors, total = len(marked), len(shapes[0]), sum(shapes[0])
+    ambient = product_terms(graph, marked, all_shapes(m, factors, total))
+
+    generators = []
+    for parts in range(1, m + 1):
+        for relation in find_relations(graph, marked, all_shapes(m, factors - 1, total - parts)):
+            for pattern in graph.forest_polynomials(marked, parts):
+                generators.append(
+                    {
+                        tuple(sorted((*t, pattern), key=lambda p: (len(set(p)), p))): c
+                        for t, c in relation.items()
+                    }
+                )
+
+    rows = [[r.get(term, 0) for term in ambient] for r in generators]
+    both = rows + [[r.get(term, 0) for term in ambient] for r in target]
+    return rational_rank(both) - rational_rank(rows)
+
+
+COUNTS = [
+    # m, n, shapes, dimension, inherited, new
+    (3, 5, [(1, 3), (2, 2)], 1, 0, 1),
+    (4, 5, [(2, 3)], 8, 0, 8),
+    (4, 5, [(2, 3, 4)], 8, 8, 0),
+    (4, 5, [(1, 2, 3)], 8, 8, 0),
+    (4, 6, [(1, 1, 4), (2, 2, 2)], 1, 1, 0),
+]
+
+
+@pytest.mark.parametrize('m, n, shapes, dimension, inherited, new', COUNTS)
+def test_relation_counts(m, n, shapes, dimension, inherited, new):
+    graph = Graph(complete_graph(n))
+    counts = relation_counts(graph, list(range(m)), shapes)
+    assert counts.dimension == dimension
+    assert counts.inherited == inherited
+    assert counts.new == new
+
+
+@pytest.mark.parametrize(
+    'm, n, shapes',
+    [
+        (3, 4, [(1, 3), (2, 2)]),
+        (3, 4, [(2, 2, 2)]),
+        (3, 4, [(1, 2, 3), (2, 2, 2)]),
+        (4, 5, [(2, 3, 4)]),
+        (4, 5, [(1, 1, 4), (2, 2, 2)]),
+        (4, 5, [(1, 4, 4), (3, 3, 3)]),
+        (4, 5, [(2, 2, 3)]),
+        (4, 5, [(2, 3, 3)]),
+    ],
+)
+def test_relation_counts_agree_with_exact_bases(m, n, shapes):
+    graph = Graph(complete_graph(n))
+    marked = list(range(m))
+    assert relation_counts(graph, marked, shapes).new == exact_new_dimension(graph, marked, shapes)
+
+
+def test_inheritance_can_pass_through_shapes_outside_the_target():
+    # The derivation of phi_1111^2 * phi_1234 goes through shape (1, 2, 3)
+    graph = Graph(complete_graph(6))
+    assert relation_counts(graph, [0, 1, 2, 3], [(1, 1, 4), (2, 2, 2)]).new == 0
+
+
+def test_relation_counts_without_products():
+    assert relation_counts(Graph(complete_graph(5)), [0, 1, 2], [(2, 4)]).products == 0
+
+
+def test_all_shapes():
+    assert all_shapes(4, 3, 9) == [(1, 4, 4), (2, 3, 4), (3, 3, 3)]
+    assert all_shapes(4, 1, 5) == []
 
 
 def test_product_terms_are_distinct_and_unordered():

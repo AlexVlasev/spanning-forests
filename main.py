@@ -9,6 +9,7 @@ Examples:
     python main.py 111 123 --graph 0-1,1-2,2-3,3-0,0-2 --marked 0,1,3
     python main.py --relations 2,2,3 --marked 0,1,2,3 --graph K6
     python main.py --relations 1,3 2,2 --marked 0,1,2 --graph K5 --show-relations
+    python main.py --relations 1,4,4 3,3,3 --marked 0,1,2,3 --sweep 8
 """
 
 import argparse
@@ -18,7 +19,13 @@ from time import time
 
 from graph import Graph, complete_graph
 from identities import IdentitySolver
-from relations import find_relations, format_relation, product_terms, relation_dimension
+from relations import (
+    find_relations,
+    format_relation,
+    product_terms,
+    relation_counts,
+    relation_dimension,
+)
 
 
 def parse_graph(spec):
@@ -50,6 +57,31 @@ def parse_shape(spec):
         return tuple(int(parts) for parts in spec.split(','))
     except ValueError:
         raise argparse.ArgumentTypeError(f'expected numbers of parts like 2,3, got {spec!r}')
+
+
+def print_relations(graph, marked, args):
+    shapes = args.relations
+    print(f'Products : {len(product_terms(graph, marked, shapes))}')
+    print(f'Dimension: {relation_dimension(graph, marked, shapes)}')
+    if args.new:
+        counts = relation_counts(graph, marked, shapes)
+        print(f'Inherited: {counts.inherited}')
+        print(f'New      : {counts.new}')
+    if args.show_relations:
+        for i, relation in enumerate(find_relations(graph, marked, shapes), 1):
+            print(f'\nRelation {i}:\n{format_relation(relation)}')
+
+
+def print_sweep(marked, shapes, largest):
+    """The counts on each complete graph that contains the marked vertices, up to K_largest."""
+    print(f'{"Graph":<6}{"Products":>10}{"Dimension":>11}{"Inherited":>11}{"New":>7}')
+    for n in range(max(marked) + 1, largest + 1):
+        counts = relation_counts(Graph(complete_graph(n)), marked, shapes)
+        print(
+            f'{"K" + str(n):<6}{counts.products:>10}{counts.dimension:>11}'
+            f'{counts.inherited:>11}{counts.new:>7}',
+            flush=True,
+        )
 
 
 def main(argv=None):
@@ -102,6 +134,17 @@ def main(argv=None):
         action='store_true',
         help='with --relations, also print a basis of the relations (slower)',
     )
+    parser.add_argument(
+        '--new',
+        action='store_true',
+        help='with --relations, also split the dimension into inherited and new relations',
+    )
+    parser.add_argument(
+        '--sweep',
+        type=int,
+        metavar='N',
+        help='with --relations, instead of --graph, print the counts on complete graphs up to K_N',
+    )
     parser.add_argument('-q', '--quiet', action='store_true', help='hide progress messages')
     args = parser.parse_args(argv)
 
@@ -112,12 +155,15 @@ def main(argv=None):
     else:
         if args.P is None or args.Q is None:
             parser.error('expected P and Q, or --relations')
-        if args.show_relations:
-            parser.error('--show-relations needs --relations')
+        if args.show_relations or args.new or args.sweep is not None:
+            parser.error('--show-relations, --new and --sweep need --relations')
         marked = args.marked if args.marked is not None else list(range(len(args.P)))
         if not len(args.P) == len(args.Q) == len(marked):
             parser.error('P, Q and the marked vertices must have the same length')
-    if max(marked) >= len(args.graph):
+    if args.sweep is not None:
+        if max(marked) >= args.sweep:
+            parser.error(f'K{args.sweep} has no vertex {max(marked)}')
+    elif max(marked) >= len(args.graph):
         parser.error(f'the graph has no vertex {max(marked)}')
 
     # Progress messages are logged at INFO level, to stderr
@@ -126,16 +172,11 @@ def main(argv=None):
 
     start = time()
     if args.relations is not None:
-        graph = Graph(args.graph)
         try:
-            print(f'Products : {len(product_terms(graph, marked, args.relations))}')
-            if args.show_relations:
-                relations = find_relations(graph, marked, args.relations)
-                print(f'Dimension: {len(relations)}')
-                for i, relation in enumerate(relations, 1):
-                    print(f'\nRelation {i}:\n{format_relation(relation)}')
+            if args.sweep is not None:
+                print_sweep(marked, args.relations, args.sweep)
             else:
-                print(f'Dimension: {relation_dimension(graph, marked, args.relations)}')
+                print_relations(Graph(args.graph), marked, args)
         except ValueError as error:
             parser.error(str(error))
         print(f'\nComputation took: {time() - start:.2f} sec')
