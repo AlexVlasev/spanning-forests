@@ -151,10 +151,10 @@ The sizes involved grow combinatorially, both in the graph and in the number of 
 ## References
 
 [^vlasev2012]: Vlasev, A., & Yeats, K. (2012). A four-vertex, quadratic, spanning forest polynomial identity. *Electronic Journal of Linear Algebra*, 23(1), 923-941. 
-  [![arXiv](https://img.shields.io/badge/arXiv-1106.2869-b31b1b.svg)](https://arxiv.org/abs/1106.2869) [![DOI](https://img.shields.io/badge/DOI-10.13001%2F1081--3810.1566-blue.svg)](https://doi.org/10.13001/1081-3810.1566)
+  [arXiv:1106.2869](https://arxiv.org/abs/1106.2869), [DOI:10.13001/1081-3810.1566](https://doi.org/10.13001/1081-3810.1566)
 
 [^fraser2023]: Fraser, M., & Yeats, K. (2023). Column expansion identities and quadratic spanning forest identities. *Australasian Journal of Combinatorics*, 86, 271-307. 
-  [![arXiv](https://img.shields.io/badge/arXiv-2109.13401-b31b1b.svg)](https://arxiv.org/abs/2109.13401) [![AJC](https://img.shields.io/badge/AJC-86-blue.svg)](https://ajc.maths.uq.edu.au/v86.p271)
+  [arXiv:2109.13401](https://arxiv.org/abs/2109.13401), [AJC 86](https://ajc.maths.uq.edu.au/v86.p271)
 
 [^choi2026]: Choi, K., & Yeats, R. (2026). A framework for spanning forest identities. *arXiv preprint*. 
-  [![arXiv](https://img.shields.io/badge/arXiv-2610.14421-b31b1b.svg)](https://arxiv.org/abs/2610.14421)
+  [arXiv:2610.14421](https://arxiv.org/abs/2610.14421)
