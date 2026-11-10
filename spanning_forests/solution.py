@@ -8,7 +8,7 @@ from typing import Any
 
 import sympy as sym
 
-from spanning_forests.aliases import Pattern, Term
+from spanning_forests.aliases import Pattern, Product
 
 
 class Solution:
@@ -17,7 +17,7 @@ class Solution:
 
         phi_A_1 * ... * phi_A_r = sum of c(B_1, ..., B_s) * phi_B_1 * ... * phi_B_s
 
-    with product the tuple of patterns A_i, and the coefficients c keyed by
+    with lhs the tuple of patterns A_i, and the coefficients c keyed by
     tuples of patterns B_j. Coefficients are sympy expressions, affine in
     the free parameters of the family.
     verified is True or False once the family has been checked
@@ -26,11 +26,11 @@ class Solution:
 
     def __init__(
         self,
-        product: Sequence[Pattern],
+        lhs: Sequence[Pattern],
         coefficients: Mapping[Any, Any],
         verified: bool | None = None,
     ) -> None:
-        self.product = tuple(product)
+        self.lhs = tuple(lhs)
         self.coefficients = {pair: sym.sympify(c) for pair, c in coefficients.items()}
         self.verified = verified
 
@@ -43,7 +43,7 @@ class Solution:
     def dimension(self) -> int:
         return len(self.free_parameters)
 
-    def classify(self) -> dict[str, list[tuple[Term, sym.Expr]]]:
+    def classify(self) -> dict[str, list[tuple[Product, sym.Expr]]]:
         return classify(self.coefficients)
 
     def report(self) -> str:
@@ -51,8 +51,8 @@ class Solution:
         classes = self.classify()
         lines = []
         for title, kind in (('Depd', 'dependent'), ('Fixd', 'fixed'), ('Free', 'free')):
-            for term, value in classes[kind]:
-                lines.append(f'{title}: {" x ".join(term)} = {value}')
+            for product, value in classes[kind]:
+                lines.append(f'{title}: {" x ".join(product)} = {value}')
 
         lines.append('\n====================================\n')
         lines.append(f'Num vars : {len(self.coefficients)}')
@@ -64,10 +64,10 @@ class Solution:
 
     def identity(self) -> str:
         """The identity, listing the nonzero terms of the right hand side."""
-        lines = [f'{_format_product(self.product)} =']
-        for term, c in self.coefficients.items():
-            if c != 0:
-                lines.append(f'    + ({c}) * {_format_product(term)}')
+        lines = [f'{_format_product(self.lhs)} =']
+        for product, coefficient in self.coefficients.items():
+            if coefficient != 0:
+                lines.append(f'    + ({coefficient}) * {_format_product(product)}')
         return '\n'.join(lines)
 
 
@@ -75,7 +75,7 @@ def _format_product(patterns: Iterable[Pattern]) -> str:
     return ' * '.join(f'phi_{pattern}' for pattern in patterns)
 
 
-def classify(values: Mapping[Any, Any]) -> dict[str, list[tuple[Term, sym.Expr]]]:
+def classify(values: Mapping[Any, Any]) -> dict[str, list[tuple[Product, sym.Expr]]]:
     """
     Sorts coefficients into exactly one of:
         forbidden: always 0

@@ -13,40 +13,44 @@ class Polynomial:
 
     def _nonzero(self) -> dict[Power, int]:
         """The coefficients that are not 0."""
-        return {p: c for p, c in self.coefficients.items() if c != 0}
+        return {
+            power: coefficient
+            for power, coefficient in self.coefficients.items()
+            if coefficient != 0
+        }
 
     def __repr__(self) -> str:
         return str(self)
 
     def __monomial(self, power: Power) -> str:
         elements = []
-        for p, x in zip(power, self.variables):
-            if p == 0:
+        for exponent, variable in zip(power, self.variables):
+            if exponent == 0:
                 continue
-            if p == 1:
-                elements.append(x)
+            if exponent == 1:
+                elements.append(variable)
                 continue
-            superscript = str(p)
+            superscript = str(exponent)
             if superscript.startswith('-'):
                 superscript = f'({superscript})'
-            elements.append(f'{x}^{superscript}')
+            elements.append(f'{variable}^{superscript}')
 
         return ''.join(sorted(elements))
 
     def __str__(self) -> str:
         terms = []
-        items = sorted(self.coefficients.items(), key=lambda x: x[0])
-        for p, c in items:
-            if c == 0:
+        items = sorted(self.coefficients.items(), key=lambda item: item[0])
+        for power, value in items:
+            if value == 0:
                 continue
-            monomial = self.__monomial(p)
-            coefficient = c
-            if c == 1:
+            monomial = self.__monomial(power)
+            coefficient = value
+            if value == 1:
                 coefficient = ''
-            if c == -1:
+            if value == -1:
                 coefficient = '-'
             term = f'{coefficient}{monomial}'
-            if c < 0:
+            if value < 0:
                 term = f'({term})'
             if not term:
                 term = '1'
@@ -79,16 +83,19 @@ class MultilinearPolynomial:
         return self.variables == other.variables and self.terms == other.terms
 
     def __mul__(self, scalar: int) -> 'MultilinearPolynomial':
-        return MultilinearPolynomial(self.variables, {m: c * scalar for m, c in self.terms.items()})
+        return MultilinearPolynomial(
+            self.variables,
+            {mask: coefficient * scalar for mask, coefficient in self.terms.items()},
+        )
 
     __rmul__ = __mul__
 
     def to_polynomial(self) -> Polynomial:
         """The same polynomial as a Polynomial, with exponent tuples."""
         coefficients = dict()
-        for mask, c in self.terms.items():
+        for mask, coefficient in self.terms.items():
             power = tuple((mask >> e) & 1 for e in range(len(self.variables)))
-            coefficients[power] = c
+            coefficients[power] = coefficient
         return Polynomial(self.variables, coefficients)
 
     def __repr__(self) -> str:

@@ -71,7 +71,7 @@ def numeric_equations(
 
     equations = []
     for i in range(len(points)):
-        row = tuple(p[i] * q[i] for p in values_P for q in values_Q)
+        row = tuple(value_P[i] * value_Q[i] for value_P in values_P for value_Q in values_Q)
         constant = values_lhs[0][i] * values_lhs[1][i]
         equations.append((row, constant))
     return equations
@@ -79,11 +79,13 @@ def numeric_equations(
 
 def _terms(poly: MultilinearPolynomial) -> list[tuple[int, tuple[int, ...]]]:
     """The terms of a MultilinearPolynomial as (coefficient, edge indices) pairs."""
-    return [(c, edge_indices(mask)) for mask, c in poly.terms.items()]
+    return [(coefficient, edge_indices(mask)) for mask, coefficient in poly.terms.items()]
 
 
 def _evaluate(terms: list[tuple[int, tuple[int, ...]]], point: Point) -> int:
-    return sum(c * math.prod(point[e] for e in edges) for c, edges in terms)
+    return sum(
+        coefficient * math.prod(point[edge] for edge in edges) for coefficient, edges in terms
+    )
 
 
 def evaluate_all(poly: MultilinearPolynomial, points: list[Point]) -> list[int]:
@@ -109,11 +111,11 @@ def evaluate_all_numpy(
     degree = max(len(edges) for _, edges in terms)
     num_edges = len(points[0])
     index = np.full((len(terms), degree), num_edges, dtype=np.int64)
-    for t, (_, edges) in enumerate(terms):
-        index[t, : len(edges)] = edges
+    for term, (_, edges) in enumerate(terms):
+        index[term, : len(edges)] = edges
     coordinates = np.array([[*point, 1] for point in points], dtype=np.int64)
 
-    bound = 2 * sum(abs(c) for c, _ in terms) * max(map(max, points)) ** degree
+    bound = 2 * sum(abs(coefficient) for coefficient, _ in terms) * max(map(max, points)) ** degree
     primes = []
     while math.prod(primes) <= bound:
         if len(primes) == len(EVALUATION_PRIMES):
@@ -124,20 +126,20 @@ def evaluate_all_numpy(
     step = max(1, block_size // len(points))
     residues = []
     for p in primes:
-        coeffs = np.array([c % p for c, _ in terms], dtype=np.int64)
+        coeffs = np.array([coefficient % p for coefficient, _ in terms], dtype=np.int64)
         total = np.zeros(len(points), dtype=np.int64)
         for start in range(0, len(terms), step):
             block = index[start : start + step]
             values = coeffs[start : start + step] * np.ones((len(points), 1), dtype=np.int64)
-            for d in range(degree):
-                values = values * coordinates[:, block[:, d]] % p
+            for position in range(degree):
+                values = values * coordinates[:, block[:, position]] % p
             total = (total + values.sum(axis=1)) % p
         residues.append(total)
 
     modulus = math.prod(primes)
     exact = []
     for i in range(len(points)):
-        value = crt([int(r[i]) for r in residues], primes)
+        value = crt([int(residue[i]) for residue in residues], primes)
         exact.append(value - modulus if value > modulus // 2 else value)
     return exact
 
@@ -145,8 +147,8 @@ def evaluate_all_numpy(
 def crt(residues: list[int], primes: list[int]) -> int:
     """The integer modulo the product of the primes with the given residues."""
     value, modulus = 0, 1
-    for r, p in zip(residues, primes):
-        value += modulus * ((r - value) * pow(modulus, -1, p) % p)
+    for residue, p in zip(residues, primes):
+        value += modulus * ((residue - value) * pow(modulus, -1, p) % p)
         modulus *= p
     return value
 

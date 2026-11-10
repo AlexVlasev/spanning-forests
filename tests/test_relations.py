@@ -109,7 +109,7 @@ def test_expand_product_with_three_factors():
     graph = Graph(complete_graph(6))
     product = ('1111', '1234', '1234')
     solution = Marking(graph, [0, 1, 2, 3]).expand_product(product, [(3, 3, 3)])
-    assert solution.product == product
+    assert solution.lhs == product
     assert solution.dimension == 0
     assert sorted(solution.coefficients.values()).count(1) == 16
     assert sorted(solution.coefficients.values()).count(0) == 40
@@ -168,7 +168,7 @@ def tampered(solution, change):
     """The solution with one nonzero coefficient changed by the given amount."""
     term = next(t for t, c in solution.coefficients.items() if c != 0)
     coefficients = solution.coefficients
-    return Solution(solution.product, {**coefficients, term: coefficients[term] + change})
+    return Solution(solution.lhs, {**coefficients, term: coefficients[term] + change})
 
 
 def test_verify_expansion_rejects_a_wrong_coefficient():
@@ -292,7 +292,7 @@ def expand(graph, marked, term):
 
 def brute_force_dimension(graph, marked, shapes):
     """The dimension from expanding every product into monomials, over the rationals."""
-    terms = Marking(graph, marked).product_terms(shapes)
+    terms = Marking(graph, marked).products(shapes)
     expansions = [expand(graph, marked, term) for term in terms]
 
     monomials = sorted(set().union(*expansions))
@@ -335,7 +335,7 @@ def test_found_relations_are_a_basis_of_exact_relations(m, n, shapes):
     relations = Marking(graph, marked).find_relations(shapes)
     assert len(relations) == Marking(graph, marked).relation_dimension(shapes)
 
-    terms = Marking(graph, marked).product_terms(shapes)
+    terms = Marking(graph, marked).products(shapes)
     assert sympy.Matrix([[r.get(t, 0) for t in terms] for r in relations]).rank() == len(relations)
 
     for relation in relations:
@@ -380,7 +380,7 @@ def exact_new_dimension(graph, marked, shapes):
     """The new relations, from exact bases of the relations, computed over the rationals."""
     target = Marking(graph, marked).find_relations(shapes)
     m, factors, total = len(marked), len(shapes[0]), sum(shapes[0])
-    ambient = Marking(graph, marked).product_terms(all_shapes(m, factors, total))
+    ambient = Marking(graph, marked).products(all_shapes(m, factors, total))
 
     generators = []
     for parts in range(1, m + 1):
@@ -471,18 +471,18 @@ def test_relation_counts_with_more_marked_vertices_than_parts(shape):
     assert counts.new + counts.inherited == counts.dimension
 
 
-def test_product_terms_are_distinct_and_unordered():
+def test_products_are_distinct_and_unordered():
     graph = Graph(complete_graph(4))
-    terms = Marking(graph, [0, 1, 2]).product_terms([(2, 2, 2)])
+    terms = Marking(graph, [0, 1, 2]).products([(2, 2, 2)])
     # Multisets of size 3 from the 3 two-part partitions
     assert len(terms) == len(set(terms)) == 10
     assert all(list(term) == sorted(term) for term in terms)
 
 
-def test_product_terms_have_one_factor_per_part_count():
+def test_products_have_one_factor_per_part_count():
     graph = Graph(complete_graph(5))
     # 7 two-part partitions, 6 three-part partitions and 1 four-part partition
-    assert len(Marking(graph, [0, 1, 2, 3]).product_terms([(2, 3, 4)])) == 7 * 6
+    assert len(Marking(graph, [0, 1, 2, 3]).products([(2, 3, 4)])) == 7 * 6
 
 
 def test_dodgson_is_the_only_relation_mixing_these_shapes():

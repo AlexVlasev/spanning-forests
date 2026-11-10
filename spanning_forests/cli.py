@@ -17,7 +17,7 @@ import argparse
 import logging
 from time import time
 
-from spanning_forests.aliases import AdjacencyMatrix, Marked, Shape, Term
+from spanning_forests.aliases import AdjacencyMatrix, Marked, Shape, Product
 from spanning_forests.graph import Graph, complete_graph
 from spanning_forests.identities import IdentitySolver
 from spanning_forests.relations import Marking, format_relation
@@ -55,7 +55,7 @@ def parse_shape(spec: str) -> Shape:
         raise argparse.ArgumentTypeError(f'expected numbers of parts like 2,3, got {spec!r}')
 
 
-def parse_product(spec: str) -> Term:
+def parse_product(spec: str) -> Product:
     return tuple(spec.split(','))
 
 
@@ -68,7 +68,7 @@ def print_relations(marking: Marking, args: argparse.Namespace) -> None:
         print(f'Inherited: {counts.inherited}')
         print(f'New      : {counts.new}')
     else:
-        print(f'Products : {len(marking.product_terms(shapes))}')
+        print(f'Products : {len(marking.products(shapes))}')
         print(f'Dimension: {marking.relation_dimension(shapes)}')
     if args.show_relations:
         for i, relation in enumerate(marking.find_relations(shapes), 1):

@@ -70,8 +70,8 @@ def test_numeric_and_symbolic_systems_agree(name, marked, P, Q, balanced, dimens
     problem = solver.problem(P, Q, balanced)
     num_vars = len(problem.pairs)
 
-    numeric = solver.get_numeric_equations(problem)
-    symbolic = solver.get_equations(problem)
+    numeric = solver.numeric_system(problem)
+    symbolic = solver.exact_system(problem)
     assert solver.solve_system(numeric, num_vars) == solver.solve_system(symbolic, num_vars)
 
 
@@ -81,7 +81,7 @@ def test_modular_and_exact_solvers_agree(name, marked, P, Q, balanced, dimension
     problem = solver.problem(P, Q, balanced)
     num_vars = len(problem.pairs)
 
-    for equations in (solver.get_numeric_equations(problem), solver.get_equations(problem)):
+    for equations in (solver.numeric_system(problem), solver.exact_system(problem)):
         exact = solver.solve_system(equations, num_vars, modular=False)
         assert solver.solve_system(equations, num_vars, modular=True) == exact
 
@@ -146,18 +146,18 @@ def test_chunking_and_numpy_do_not_change_equations(name, marked, P, Q):
     solver = make_solver(GRAPHS[name], marked)
     problem = solver.problem(P, Q, balanced=True)
 
-    expected = solver.get_equations(problem, chunk_edges=0, use_numpy=False)
+    expected = solver.exact_system(problem, chunk_edges=0, use_numpy=False)
     for use_numpy in (False, True):
         for chunk_edges in (0, 2, 6, 8):
-            assert solver.get_equations(problem, chunk_edges, use_numpy) == expected
+            assert solver.exact_system(problem, chunk_edges, use_numpy) == expected
 
 
 @pytest.mark.parametrize('name, marked, P, Q, balanced, dimension', CASES)
 def test_numpy_evaluation_gives_the_same_numeric_equations(name, marked, P, Q, balanced, dimension):
     solver = make_solver(GRAPHS[name], marked)
     problem = solver.problem(P, Q, balanced)
-    expected = solver.get_numeric_equations(problem, use_numpy=False)
-    assert solver.get_numeric_equations(problem, use_numpy=True) == expected
+    expected = solver.numeric_system(problem, use_numpy=False)
+    assert solver.numeric_system(problem, use_numpy=True) == expected
 
 
 def test_numpy_evaluation_with_negative_and_large_coefficients():
@@ -217,16 +217,16 @@ def test_numpy_equations_with_coefficients_other_than_one():
     solver = make_solver(GRAPHS['K5'], [0, 1, 2])
     problem = solver.problem('111', '123')
     problem.phi_P = problem.phi_P * 2
-    expected = solver.get_equations(problem, use_numpy=False)
-    assert solver.get_equations(problem, use_numpy=True) == expected
+    expected = solver.exact_system(problem, use_numpy=False)
+    assert solver.exact_system(problem, use_numpy=True) == expected
 
 
 def test_numpy_equations_with_empty_polynomials():
     # In a disconnected graph phi_P is 0, so the identity has no solution
     solver = make_solver(adjacency(5, [(0, 1), (1, 2), (3, 4)]), [0, 1, 2])
     problem = solver.problem('111', '123', balanced=True)
-    expected = solver.get_equations(problem, use_numpy=False)
-    assert solver.get_equations(problem, use_numpy=True) == expected
+    expected = solver.exact_system(problem, use_numpy=False)
+    assert solver.exact_system(problem, use_numpy=True) == expected
 
 
 @pytest.mark.parametrize('name, marked, P, Q, balanced, dimension', CASES)

@@ -60,26 +60,32 @@ def exact_equations(
     # with the terms of each polynomial as (bitmask of edges, coefficient) pairs
     terms_P = [list(poly.terms.items()) for poly in problem.rhs_P.values()]
     terms_Q = [list(poly.terms.items()) for poly in problem.rhs_Q.values()]
-    factors = [(list(problem.phi_P.terms.items()), list(problem.phi_Q.terms.items()))]
-    factors.extend(itertools.product(terms_P, terms_Q))
+    factor_pairs = [(list(problem.phi_P.terms.items()), list(problem.phi_Q.terms.items()))]
+    factor_pairs.extend(itertools.product(terms_P, terms_Q))
 
     chunks = dict()
-    for x in range(chunk_mask + 1):
-        for y in range(chunk_mask + 1):
-            chunks.setdefault((x | y, x & y), []).append((x, y))
+    for part_a in range(chunk_mask + 1):
+        for part_b in range(chunk_mask + 1):
+            chunks.setdefault((part_a | part_b, part_a & part_b), []).append((part_a, part_b))
 
     equations: set[Equation] = set()
     if use_numpy:
         array_buckets = [
-            (_bucket_arrays(a, num_edges, chunk_mask), _bucket_arrays(b, num_edges, chunk_mask))
-            for a, b in factors
+            (
+                _bucket_arrays(terms_a, num_edges, chunk_mask),
+                _bucket_arrays(terms_b, num_edges, chunk_mask),
+            )
+            for terms_a, terms_b in factor_pairs
         ]
-        for pairs in chunks.values():
-            equations.update(_chunk_equations_numpy(array_buckets, pairs))
+        for part_pairs in chunks.values():
+            equations.update(_chunk_equations_numpy(array_buckets, part_pairs))
     else:
-        buckets = [(_bucket(a, chunk_mask), _bucket(b, chunk_mask)) for a, b in factors]
-        for pairs in chunks.values():
-            equations.update(_dense(_chunk_equations(buckets, pairs), len(factors) - 1))
+        buckets = [
+            (_bucket(terms_a, chunk_mask), _bucket(terms_b, chunk_mask))
+            for terms_a, terms_b in factor_pairs
+        ]
+        for part_pairs in chunks.values():
+            equations.update(_dense(_chunk_equations(buckets, part_pairs), len(factor_pairs) - 1))
     return equations
 
 
@@ -114,7 +120,8 @@ def expansion_equations(
         if math.prod(int(np.abs(arrays[id(poly)][1]).sum()) for poly in factors) >= 2**63:
             raise ValueError(f'coefficients too large to expand products of {len(factors)} factors')
         column_keys, column_coeffs = _expand_product(
-            sorted((arrays[id(poly)] for poly in factors), key=lambda a: len(a[0])), block_size
+            sorted((arrays[id(poly)] for poly in factors), key=lambda factor: len(factor[0])),
+            block_size,
         )
         keys.append(column_keys)
         coeffs.append(column_coeffs)
@@ -149,7 +156,7 @@ def _expand_product(factors: list[KeyArrays], block_size: int) -> KeyArrays:
 
 
 def _chunk_equations(
-    buckets: list[tuple[Buckets, Buckets]], pairs: list[tuple[int, int]]
+    buckets: list[tuple[Buckets, Buckets]], part_pairs: list[tuple[int, int]]
 ) -> set[SparseEquation]:
     """
     The equations of exact_equations for the monomials in one chunk, with
@@ -158,23 +165,24 @@ def _chunk_equations(
     products = []
     for buckets_a, buckets_b in buckets:
         product = dict()
-        for x, y in pairs:
-            _multiply_into(product, buckets_a.get(x, ()), buckets_b.get(y, ()))
+        for part_a, part_b in part_pairs:
+            _multiply_into(product, buckets_a.get(part_a, ()), buckets_b.get(part_b, ()))
         products.append(product)
 
     lhs = products[0]
     rows = {monomial: [] for monomial in lhs}
-    for k, product in enumerate(products[1:]):
-        for monomial, c in product.items():
-            rows.setdefault(monomial, []).append((k, c))
+    for unknown, product in enumerate(products[1:]):
+        for monomial, coefficient in product.items():
+            rows.setdefault(monomial, []).append((unknown, coefficient))
 
     equations = set()
     for monomial, entries in rows.items():
         constant = lhs.get(monomial, 0)
-        gcd = math.gcd(*(c for _, c in entries), constant)
+        gcd = math.gcd(*(coefficient for _, coefficient in entries), constant)
         if gcd == 0:
             continue
-        equations.add((tuple((k, c // gcd) for k, c in entries), constant // gcd))
+        sparse_row = tuple((unknown, coefficient // gcd) for unknown, coefficient in entries)
+        equations.add((sparse_row, constant // gcd))
     return equations
 
 
@@ -183,8 +191,8 @@ def _dense(sparse_equations: set[SparseEquation], num_vars: int) -> set[Equation
     equations = set()
     for entries, constant in sparse_equations:
         row = [0] * num_vars
-        for k, c in entries:
-            row[k] = c
+        for unknown, coefficient in entries:
+            row[unknown] = coefficient
         equations.add((tuple(row), constant))
     return equations
 
@@ -204,28 +212,31 @@ def _bucket_arrays(terms: Terms, num_edges: int, mask: int) -> ArrayBuckets:
     exponent * 3**e over its edges e, so the key of a product of two
     monomials without squares is the sum of their keys.
     """
-    masks = np.array([m for m, _ in terms], dtype=np.uint64)
-    coeffs = np.array([c for _, c in terms], dtype=np.int64)
+    masks = np.array([term_mask for term_mask, _ in terms], dtype=np.uint64)
+    coeffs = np.array([coefficient for _, coefficient in terms], dtype=np.int64)
     keys = _monomial_keys(masks, num_edges)
 
-    ids = masks & np.uint64(mask)
-    order = np.argsort(ids, kind='stable')
-    ids, keys, coeffs = ids[order], keys[order], coeffs[order]
-    values, starts = np.unique(ids, return_index=True)
-    ends = [*starts[1:], len(ids)]
-    return {int(v): (keys[s:e], coeffs[s:e]) for v, s, e in zip(values, starts, ends)}
+    part_ids = masks & np.uint64(mask)
+    order = np.argsort(part_ids, kind='stable')
+    part_ids, keys, coeffs = part_ids[order], keys[order], coeffs[order]
+    values, starts = np.unique(part_ids, return_index=True)
+    ends = [*starts[1:], len(part_ids)]
+    return {
+        int(value): (keys[start:end], coeffs[start:end])
+        for value, start, end in zip(values, starts, ends)
+    }
 
 
 def _monomial_keys(masks: UIntArray, num_edges: int, base: int = 3) -> UIntArray:
     """The key of each monomial without squares, the sum of base**e over its edges e."""
     keys = np.zeros(len(masks), dtype=np.uint64)
-    for e in range(num_edges):
-        keys += ((masks >> np.uint64(e)) & np.uint64(1)) * np.uint64(base**e)
+    for edge in range(num_edges):
+        keys += ((masks >> np.uint64(edge)) & np.uint64(1)) * np.uint64(base**edge)
     return keys
 
 
 def _chunk_equations_numpy(
-    buckets: list[tuple[ArrayBuckets, ArrayBuckets]], pairs: list[tuple[int, int]]
+    buckets: list[tuple[ArrayBuckets, ArrayBuckets]], part_pairs: list[tuple[int, int]]
 ) -> set[Equation]:
     """
     The equations of exact_equations for the monomials in one chunk, from the
@@ -236,11 +247,11 @@ def _chunk_equations_numpy(
     keys, columns, coeffs = [], [], []
     for column, (buckets_a, buckets_b) in enumerate(buckets):
         column_keys, column_coeffs = [], []
-        for x, y in pairs:
-            if x not in buckets_a or y not in buckets_b:
+        for part_a, part_b in part_pairs:
+            if part_a not in buckets_a or part_b not in buckets_b:
                 continue
-            keys_a, coeffs_a = buckets_a[x]
-            keys_b, coeffs_b = buckets_b[y]
+            keys_a, coeffs_a = buckets_a[part_a]
+            keys_b, coeffs_b = buckets_b[part_b]
             column_keys.append(np.add.outer(keys_a, keys_b).ravel())
             column_coeffs.append(np.multiply.outer(coeffs_a, coeffs_b).ravel())
         if not column_keys:
@@ -285,11 +296,12 @@ def _equations_from_columns(
     for start, length in _unique_runs(starts, lengths, columns, coeffs):
         row = [0] * num_vars
         constant = 0
-        for column, c in zip(columns[start : start + length], coeffs[start : start + length]):
+        entries = zip(columns[start : start + length], coeffs[start : start + length])
+        for column, coefficient in entries:
             if column == 0:
-                constant = int(c)
+                constant = int(coefficient)
             else:
-                row[column - 1] = int(c)
+                row[column - 1] = int(coefficient)
         equations.add((tuple(row), constant))
     return equations
 
@@ -346,8 +358,8 @@ def _multiply_into(
     Each monomial of the product is identified by the pair
     (a | b, a & b): its edges, and which of those are squared.
     """
-    for a, c in terms_a:
-        for b, d in terms_b:
-            key = (a | b, a & b)
-            product[key] = product.get(key, 0) + c * d
+    for mask_a, coeff_a in terms_a:
+        for mask_b, coeff_b in terms_b:
+            key = (mask_a | mask_b, mask_a & mask_b)
+            product[key] = product.get(key, 0) + coeff_a * coeff_b
 

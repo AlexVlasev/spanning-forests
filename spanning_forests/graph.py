@@ -72,10 +72,10 @@ class Graph:
         seen = {0}
         stack = [0]
         while stack:
-            for w in neighbours[stack.pop()]:
-                if w not in seen:
-                    seen.add(w)
-                    stack.append(w)
+            for neighbour in neighbours[stack.pop()]:
+                if neighbour not in seen:
+                    seen.add(neighbour)
+                    stack.append(neighbour)
         return len(seen) == self.num_vertices
 
     def _enumerate_trees(self) -> list[int]:
@@ -97,9 +97,12 @@ class Graph:
                 return
 
             i, j = self.edges[e]
-            ci, cj = components[i], components[j]
-            if ci != cj:
-                merged = [ci if c == cj else c for c in components]
+            component_i, component_j = components[i], components[j]
+            if component_i != component_j:
+                merged = [
+                    component_i if component == component_j else component
+                    for component in components
+                ]
                 search(e + 1, tree | (1 << e), size + 1, merged)
 
             excluded.add(e)
@@ -177,7 +180,10 @@ class Graph:
                 continue
             terms.setdefault(pattern, dict())[forest] = 1
 
-        return {p: MultilinearPolynomial(self.edge_vars, terms[p]) for p in sorted(terms)}
+        return {
+            pattern: MultilinearPolynomial(self.edge_vars, terms[pattern])
+            for pattern in sorted(terms)
+        }
 
     def _forests(self, num_parts: int) -> set[int]:
         """The distinct bitmasks of every spanning tree minus num_parts - 1 of its edges."""

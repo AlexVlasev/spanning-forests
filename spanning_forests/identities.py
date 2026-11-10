@@ -67,10 +67,10 @@ class IdentitySolver:
         than P and the Q_j one part fewer than Q. With balanced=True, the
         numbers of parts are balanced instead, with the P_i having the fewer.
         """
-        p, q = len(set(P)), len(set(Q))
+        parts_P, parts_Q = len(set(P)), len(set(Q))
         if balanced:
-            return self._problem(P, Q, (p + q) // 2, (p + q + 1) // 2)
-        return self._problem(P, Q, p + 1, q - 1)
+            return self._problem(P, Q, (parts_P + parts_Q) // 2, (parts_P + parts_Q + 1) // 2)
+        return self._problem(P, Q, parts_P + 1, parts_Q - 1)
 
     def _problem(self, P: Pattern, Q: Pattern, parts_P: int, parts_Q: int) -> Problem:
         phi_P = self.graph.forest_polynomial(self.marked, P)
@@ -86,7 +86,7 @@ class IdentitySolver:
 
         return Problem(P, Q, phi_P, phi_Q, rhs_P, rhs_Q)
 
-    def get_equations(
+    def exact_system(
         self, problem: Problem, chunk_edges: int = 8, use_numpy: bool = True
     ) -> set[Equation]:
         """The exact linear system of a Problem, from equations.exact_equations."""
@@ -95,7 +95,7 @@ class IdentitySolver:
         logger.info(f'Found {len(equations)} distinct equations')
         return equations
 
-    def get_numeric_equations(
+    def numeric_system(
         self, problem: Problem, extra_points: int = 10, seed: int = 0, use_numpy: bool = True
     ) -> list[Equation]:
         """
@@ -110,19 +110,22 @@ class IdentitySolver:
         """
         Confirms symbolically that every member of a solution family returned
         by solve_problem satisfies the identity, using the exact system of
-        get_equations.
+        exact_system.
         """
         # The numbers of parts of the P_i and Q_j, from any pair of patterns
-        p, q = next(iter(solution.coefficients))
-        P, Q = solution.product
-        problem = self._problem(P, Q, len(set(p)), len(set(q)))
+        first_P, first_Q = next(iter(solution.coefficients))
+        P, Q = solution.lhs
+        problem = self._problem(P, Q, len(set(first_P)), len(set(first_Q)))
         return self._verify(problem, solution)
 
     def _verify(self, problem: Problem, solution: Solution) -> bool:
         logger.info('Verifying solution symbolically')
         coefficients = [solution.coefficients[pair] for pair in problem.pairs]
-        for row, constant in self.get_equations(problem):
-            lhs = sum((r * c for r, c in zip(row, coefficients) if r), sym.Integer(0))
+        for row, constant in self.exact_system(problem):
+            lhs = sum(
+                (entry * coefficient for entry, coefficient in zip(row, coefficients) if entry),
+                sym.Integer(0),
+            )
             if sym.expand(lhs - constant) != 0:
                 return False
         return True
@@ -141,12 +144,12 @@ class IdentitySolver:
         if modular:
             return solve_modular(equations, num_vars)
 
-        xs = sym.symbols(f'x_:{num_vars}')
+        unknowns = sym.symbols(f'x_:{num_vars}')
         # Sort to keep the parametrization of the solution reproducible
         equations = sorted(equations)
         A = sym.Matrix([row for row, _ in equations])
         b = sym.Matrix([constant for _, constant in equations])
-        solutions = sym.linsolve((A, b), xs)
+        solutions = sym.linsolve((A, b), unknowns)
         # linsolve returns either EmptySet or a FiniteSet with one parametric solution
         return cast(tuple[sym.Expr, ...], solutions.args[0].args) if solutions.args else None
 
@@ -168,7 +171,7 @@ class IdentitySolver:
         problem = self.problem(P, Q, balanced)
         logger.info(f'Solving for {len(problem.pairs)} unknowns')
 
-        equations = self.get_numeric_equations(problem)
+        equations = self.numeric_system(problem)
         values = self.solve_system(equations, len(problem.pairs), modular)
         if values is None:
             return None

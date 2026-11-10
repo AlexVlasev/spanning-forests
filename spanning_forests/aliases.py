@@ -6,7 +6,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 type Pattern = str
-type Term = tuple[Pattern, ...]
+type Product = tuple[Pattern, ...]
 type Shape = tuple[int, ...]
 type Marked = Sequence[int]
 type Point = list[int]

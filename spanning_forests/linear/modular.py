@@ -159,10 +159,13 @@ def _satisfies(equations: Collection[Equation], pivots: Pivots, entries: Entries
 
 
 def _parametrize(pivots: Pivots, entries: Entries, num_vars: int) -> tuple[sym.Expr, ...]:
-    xs = sym.symbols(f'x_:{num_vars}')
-    terms = {pivot: [] for pivot in pivots}
+    symbols = sym.symbols(f'x_:{num_vars}')
+    parts = {pivot: [] for pivot in pivots}
     for column, values in entries.items():
         for i, value in values:
             value = sym.Rational(value.numerator, value.denominator)
-            terms[pivots[i]].append(value if column == num_vars else -value * xs[column])
-    return tuple(sym.Add(*terms[v]) if v in terms else xs[v] for v in range(num_vars))
+            parts[pivots[i]].append(value if column == num_vars else -value * symbols[column])
+    return tuple(
+        sym.Add(*parts[variable]) if variable in parts else symbols[variable]
+        for variable in range(num_vars)
+    )
