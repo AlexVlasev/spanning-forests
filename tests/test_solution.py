@@ -1,6 +1,6 @@
 import sympy
 
-from solution import Solution
+from spanning_forests.solution import Solution
 
 x, y = sympy.symbols('x_0 x_1')
 SOLUTION = Solution(

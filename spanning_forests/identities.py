@@ -15,13 +15,13 @@ from typing import cast
 
 import sympy as sym
 
-from aliases import Equation, Marked, Pattern
-from equations import exact_equations
-from evaluation import numeric_equations
-from graph import Graph
-from modular import solve_modular
-from polynomial import MultilinearPolynomial
-from solution import Solution
+from spanning_forests.aliases import Equation, Marked, Pattern
+from spanning_forests.graph import Graph
+from spanning_forests.linear.equations import exact_equations
+from spanning_forests.linear.evaluation import numeric_equations
+from spanning_forests.linear.modular import solve_modular
+from spanning_forests.polynomial import MultilinearPolynomial
+from spanning_forests.solution import Solution
 
 logger = logging.getLogger(__name__)
 

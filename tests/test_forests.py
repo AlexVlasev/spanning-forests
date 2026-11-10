@@ -1,7 +1,7 @@
 import pytest
 
-from graph import Graph, check_pattern
 from helpers import GRAPHS, brute_force_forests, monomials
+from spanning_forests.graph import Graph, check_pattern
 
 CASES = [
     ('K4', [0, 1, 2]),

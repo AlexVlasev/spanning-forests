@@ -6,13 +6,23 @@ import numpy as np
 import pytest
 import sympy
 
-from equations import _unique_runs
-from evaluation import MAX_POINT, crt, evaluate_all, evaluate_all_numpy, random_points
-from graph import Graph, complete_graph
 from helpers import GRAPHS, adjacency, assert_identity, make_solver
-from modular import rational_reconstruction, reduced_row_echelon, solve_modular
-from polynomial import MultilinearPolynomial
-from solution import Solution, classify
+from spanning_forests.graph import Graph, complete_graph
+from spanning_forests.linear.equations import _unique_runs
+from spanning_forests.linear.evaluation import (
+    MAX_POINT,
+    crt,
+    evaluate_all,
+    evaluate_all_numpy,
+    random_points,
+)
+from spanning_forests.linear.modular import (
+    rational_reconstruction,
+    reduced_row_echelon,
+    solve_modular,
+)
+from spanning_forests.polynomial import MultilinearPolynomial
+from spanning_forests.solution import Solution, classify
 
 CASES = [
     # name, marked, P, Q, balanced, expected dimension of the solution space
@@ -250,7 +260,7 @@ def test_classify_solution():
 
 
 def test_evaluation_primes_are_the_largest_primes_below_2_31():
-    from evaluation import EVALUATION_PRIMES
+    from spanning_forests.linear.evaluation import EVALUATION_PRIMES
 
     assert EVALUATION_PRIMES == sorted(EVALUATION_PRIMES, reverse=True)
     expected = [sympy.prevprime(2**31)]

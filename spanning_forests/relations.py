@@ -21,12 +21,12 @@ from typing import Any, cast
 import numpy as np
 import sympy as sym
 
-from aliases import Equation, IntArray, Marked, Pattern, Point, Shape, Term
-from equations import expansion_equations
-from evaluation import EVALUATION_PRIMES, evaluate_all_numpy, random_points
-from graph import MAX_PARTS, Graph, check_pattern
-from modular import reduced_row_echelon, solve_modular
-from solution import Solution
+from spanning_forests.aliases import Equation, IntArray, Marked, Pattern, Point, Shape, Term
+from spanning_forests.graph import MAX_PARTS, Graph, check_pattern
+from spanning_forests.linear.equations import expansion_equations
+from spanning_forests.linear.evaluation import EVALUATION_PRIMES, evaluate_all_numpy, random_points
+from spanning_forests.linear.modular import reduced_row_echelon, solve_modular
+from spanning_forests.solution import Solution
 
 logger = logging.getLogger(__name__)
 

@@ -2,9 +2,9 @@ import argparse
 
 import pytest
 
-from graph import complete_graph
 from helpers import adjacency
-from main import main, parse_graph, parse_shape, parse_vertices
+from spanning_forests.cli import main, parse_graph, parse_shape, parse_vertices
+from spanning_forests.graph import complete_graph
 
 
 def test_parse_graph():
@@ -87,7 +87,7 @@ def test_main_row_reduces_only_once_for_new_relations(capsys, monkeypatch):
     def fail(*args):
         raise AssertionError('relation_counts already has the dimension')
 
-    monkeypatch.setattr('main.relation_dimension', fail)
+    monkeypatch.setattr('spanning_forests.cli.relation_dimension', fail)
     assert main(['--relations', '2,3', '--marked', '0,1,2,3', '--new', '-q']) == 0
     assert 'Dimension: 8' in capsys.readouterr().out
 

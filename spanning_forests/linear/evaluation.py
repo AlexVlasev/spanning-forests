@@ -13,11 +13,11 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from aliases import Equation, Point
-from polynomial import MultilinearPolynomial, edge_indices
+from spanning_forests.aliases import Equation, Point
+from spanning_forests.polynomial import MultilinearPolynomial, edge_indices
 
 if TYPE_CHECKING:
-    from identities import Problem
+    from spanning_forests.identities import Problem
 
 # Random points have coordinates from 1 to MAX_POINT. Each point fails to add an
 # independent equation with probability at most degree / MAX_POINT, whatever the

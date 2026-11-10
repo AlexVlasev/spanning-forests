@@ -42,8 +42,7 @@ With `--relations` and `--product`, it expands a fixed product of any number of 
 From Python:
 
 ```python
-from graph import Graph, complete_graph
-from identities import IdentitySolver
+from spanning_forests import Graph, IdentitySolver, complete_graph
 
 solver = IdentitySolver(Graph(complete_graph(6)), marked=[0, 1, 2, 3])
 
@@ -139,15 +138,19 @@ The sizes involved grow combinatorially, both in the graph and in the number of 
 
 ## Project layout
 
-- `graph.py`: the `Graph` class, with its spanning trees, tree and graph polynomials, and spanning forest polynomials.
-- `identities.py`: the `IdentitySolver`, which searches for identities numerically and verifies them symbolically.
-- `evaluation.py`: the linear system from exact evaluations at random points, modulo a few primes, with the Chinese remainder theorem.
-- `equations.py`: the exact linear system from expanding every product, in chunks, with NumPy or pure Python.
-- `modular.py`: solves linear systems by row reduction modulo primes, recovering the exact rational solution.
-- `relations.py`: the dimension of the space of linear relations between products of forest polynomials with fixed numbers of parts, and the expansion of a fixed product in such products, inspired by the spaces of spanning forest identities in (Choi and Yeats, 2026[^choi2026]).
-- `solution.py`: the `Solution` class for a family of identities between products, with its report.
-- `main.py`: the command line interface.
-- `polynomial.py`: `MultilinearPolynomial`, which stores each monomial as a bitmask of its edges and is used for all spanning forest polynomials, and a general `Polynomial` class for display.
+- `main.py`: runs the command line interface.
+- `spanning_forests/`: the package. Everything meant to be used from Python can be imported from it directly.
+  - `graph.py`: the `Graph` class, with its spanning trees, tree and graph polynomials, and spanning forest polynomials.
+  - `identities.py`: the `IdentitySolver`, which searches for identities numerically and verifies them symbolically.
+  - `relations.py`: the dimension of the space of linear relations between products of forest polynomials with fixed numbers of parts, and the expansion of a fixed product in such products, inspired by the spaces of spanning forest identities in (Choi and Yeats, 2026[^choi2026]).
+  - `solution.py`: the `Solution` class for a family of identities between products, with its report.
+  - `polynomial.py`: `MultilinearPolynomial`, which stores each monomial as a bitmask of its edges and is used for all spanning forest polynomials, and a general `Polynomial` class for display.
+  - `aliases.py`: type aliases shared by the modules.
+  - `cli.py`: the command line interface.
+  - `linear/`: building and solving linear systems.
+    - `evaluation.py`: the linear system from exact evaluations at random points, modulo a few primes, with the Chinese remainder theorem.
+    - `equations.py`: the exact linear system from expanding every product, in chunks, with NumPy or pure Python.
+    - `modular.py`: solves linear systems by row reduction modulo primes, recovering the exact rational solution.
 - `tests/`: checks against brute-force forest enumeration, known identities, and the matrix-tree theorem.
 
 ## References

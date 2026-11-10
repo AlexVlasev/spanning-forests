@@ -7,11 +7,11 @@ import sympy
 from sympy.polys.domains import QQ
 from sympy.polys.matrices import DomainMatrix
 
-from equations import _sum_by_key, exact_equations, expansion_equations
-from evaluation import evaluate_all, random_points
-from graph import Graph, complete_graph
 from helpers import adjacency, assert_identity, make_solver
-from relations import (
+from spanning_forests.graph import Graph, complete_graph
+from spanning_forests.linear.equations import _sum_by_key, exact_equations, expansion_equations
+from spanning_forests.linear.evaluation import evaluate_all, random_points
+from spanning_forests.relations import (
     all_shapes,
     expand_product,
     find_relations,
@@ -21,7 +21,7 @@ from relations import (
     relation_dimension,
     verify_expansion,
 )
-from solution import Solution
+from spanning_forests.solution import Solution
 
 # Table 1 of Choi and Yeats: m, n, k, l, dimension of the relations on K_n
 TABLE_1 = [

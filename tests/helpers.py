@@ -10,8 +10,8 @@ import math
 import random
 from itertools import combinations
 
-from graph import Graph, complete_graph
-from identities import IdentitySolver
+from spanning_forests.graph import Graph, complete_graph
+from spanning_forests.identities import IdentitySolver
 
 
 def adjacency(num_vertices, edges):

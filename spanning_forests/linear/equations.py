@@ -15,11 +15,11 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from aliases import Equation, IntArray, UIntArray
-from polynomial import MultilinearPolynomial
+from spanning_forests.aliases import Equation, IntArray, UIntArray
+from spanning_forests.polynomial import MultilinearPolynomial
 
 if TYPE_CHECKING:
-    from identities import Problem
+    from spanning_forests.identities import Problem
 
 # Monomial keys sum exponent * 3**e over edges e, and products of monomials
 # without squares have keys below 3**num_edges, which fits in a uint64 up to 40 edges

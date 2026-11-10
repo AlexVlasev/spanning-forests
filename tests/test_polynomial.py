@@ -1,4 +1,4 @@
-from polynomial import MultilinearPolynomial, Polynomial, edge_indices
+from spanning_forests.polynomial import MultilinearPolynomial, Polynomial, edge_indices
 
 VARIABLES = ['x', 'y', 'z']
 

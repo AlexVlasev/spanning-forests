@@ -16,7 +16,7 @@ test:
 	pipenv run pytest -q
 
 cov:
-	pipenv run pytest -q --cov=. --cov-report=term-missing
+	pipenv run pytest -q --cov=spanning_forests --cov-report=term-missing
 
 typecheck:
 	pipenv run pyright

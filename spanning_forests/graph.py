@@ -11,8 +11,8 @@ import itertools
 
 import numpy as np
 
-from aliases import AdjacencyMatrix, Marked, Pattern
-from polynomial import MultilinearPolynomial
+from spanning_forests.aliases import AdjacencyMatrix, Marked, Pattern
+from spanning_forests.polynomial import MultilinearPolynomial
 
 # Patterns label the parts of a partition with the digits 1 to 9
 MAX_PARTS = 9

@@ -1,8 +1,8 @@
 import pytest
 import sympy
 
-from graph import Graph, complete_graph
 from helpers import GRAPHS, adjacency, edge_list, monomials, spanning_forests
+from spanning_forests.graph import Graph, complete_graph
 
 
 @pytest.mark.parametrize('n', [3, 4, 5, 6])

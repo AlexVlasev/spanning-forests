@@ -8,7 +8,7 @@ from typing import Any
 
 import sympy as sym
 
-from aliases import Pattern, Term
+from spanning_forests.aliases import Pattern, Term
 
 
 class Solution:

@@ -14,8 +14,8 @@ from fractions import Fraction
 import numpy as np
 import sympy as sym
 
-from aliases import Equation, IntArray
-from evaluation import crt
+from spanning_forests.aliases import Equation, IntArray
+from spanning_forests.linear.evaluation import crt
 
 logger = logging.getLogger(__name__)
 
