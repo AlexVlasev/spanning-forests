@@ -74,7 +74,10 @@ def expansion_equations(lhs, terms, num_edges, block_size=2**24):
 
     Monomials are keyed as in _bucket_arrays, in base one more than the
     largest number of factors, which must fit in a uint64. Each product is
-    built one factor at a time, in blocks of block_size pairs of terms.
+    built one factor at a time, in blocks of block_size pairs of terms. The
+    arithmetic is exact: a ValueError is raised if a coefficient of a product
+    might not fit in an int64, which the sum of the absolute values of the
+    coefficients of its factors would bound.
     """
     base = max(len(lhs), *map(len, terms)) + 1 if terms else len(lhs) + 1
     if base**num_edges > 2**64:
@@ -86,6 +89,8 @@ def expansion_equations(lhs, terms, num_edges, block_size=2**24):
         for poly in factors:
             if id(poly) not in arrays:
                 arrays[id(poly)] = _key_arrays(poly, num_edges, base)
+        if math.prod(int(np.abs(arrays[id(poly)][1]).sum()) for poly in factors) >= 2**63:
+            raise ValueError(f'coefficients too large to expand products of {len(factors)} factors')
         column_keys, column_coeffs = _expand_product(
             sorted((arrays[id(poly)] for poly in factors), key=lambda a: len(a[0])), block_size
         )
@@ -292,8 +297,8 @@ def _sum_by_key(keys, coeffs):
         # Only needs a sort rather than an argsort
         return np.unique(keys, return_counts=True)
     distinct, inverse = np.unique(keys, return_inverse=True)
-    # Weights are summed as floats, which is exact for these small integers
-    sums = np.rint(np.bincount(inverse.ravel(), weights=coeffs)).astype(np.int64)
+    sums = np.zeros(len(distinct), dtype=np.int64)
+    np.add.at(sums, inverse.ravel(), coeffs)
     return distinct, sums
 
 

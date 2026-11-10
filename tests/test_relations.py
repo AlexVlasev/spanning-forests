@@ -1,12 +1,13 @@
 import math
 from collections import Counter
 
+import numpy as np
 import pytest
 import sympy
 from sympy.polys.domains import QQ
 from sympy.polys.matrices import DomainMatrix
 
-from equations import exact_equations, expansion_equations
+from equations import _sum_by_key, exact_equations, expansion_equations
 from evaluation import evaluate_all, random_points
 from graph import Graph, complete_graph
 from helpers import adjacency, assert_identity, make_solver
@@ -211,6 +212,34 @@ def test_expansion_equations_agree_with_exact_equations():
     expected = exact_equations(problem, solver.graph.num_edges)
     assert expansion_equations(lhs, terms, solver.graph.num_edges) == expected
     assert expansion_equations(lhs, terms, solver.graph.num_edges, block_size=1) == expected
+
+
+def test_sum_by_key_is_exact_beyond_the_precision_of_floats():
+    keys = np.array([7, 3, 7], dtype=np.uint64)
+    coeffs = np.array([2**53, 5, 1], dtype=np.int64)
+    distinct, sums = _sum_by_key(keys, coeffs)
+    assert distinct.tolist() == [3, 7]
+    assert sums.tolist() == [5, 2**53 + 1]
+
+
+def test_verify_expansion_is_exact_for_large_coefficients():
+    # On K_3, phi_111 * phi_123 = phi_112 * phi_121 + phi_112 * phi_122 + phi_121 * phi_122
+    # Multiplying by phi_111^38 gives coefficients well beyond the precision of floats
+    graph = Graph(complete_graph(3))
+    power = ('111',) * 38
+    product = (*power, '111', '123')
+    terms = [(*power, a, b) for a, b in [('112', '121'), ('112', '122'), ('121', '122')]]
+    assert verify_expansion(graph, [0, 1, 2], Solution(product, {t: 1 for t in terms}))
+    assert not verify_expansion(
+        graph, [0, 1, 2], Solution(product, {**{t: 1 for t in terms}, terms[0]: 2})
+    )
+
+
+def test_expansion_equations_reject_coefficients_too_large():
+    # 16 monomials in each of 16 factors bounds the coefficients only by 2**64
+    tree_poly = Graph(complete_graph(4)).tree_poly
+    with pytest.raises(ValueError, match='coefficients too large'):
+        expansion_equations([tree_poly] * 16, [[tree_poly] * 16], 6)
 
 
 def test_expansion_equations_reject_keys_too_large():
