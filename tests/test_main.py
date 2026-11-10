@@ -83,6 +83,15 @@ def test_main_splits_relations_into_inherited_and_new(capsys):
     assert 'New      : 0' in out
 
 
+def test_main_row_reduces_only_once_for_new_relations(capsys, monkeypatch):
+    def fail(*args):
+        raise AssertionError('relation_counts already has the dimension')
+
+    monkeypatch.setattr('main.relation_dimension', fail)
+    assert main(['--relations', '2,3', '--marked', '0,1,2,3', '--new', '-q']) == 0
+    assert 'Dimension: 8' in capsys.readouterr().out
+
+
 def test_main_sweeps_complete_graphs(capsys):
     assert main(['--relations', '1,3', '2,2', '--marked', '0,1,2', '--sweep', '5', '-q']) == 0
     rows = [line.split() for line in capsys.readouterr().out.splitlines() if line.startswith('K')]

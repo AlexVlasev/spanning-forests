@@ -264,6 +264,12 @@ def test_ordered_search_counts_swaps_as_free_parameters():
     assert solution.dimension == swaps + relation_dimension(solver.graph, solver.marked, [(3, 3)])
 
 
+@pytest.mark.parametrize('m, n, k, l, dimension', TABLE_1)
+def test_relation_counts_agree_with_relation_dimension(m, n, k, l, dimension):
+    graph = Graph(complete_graph(n))
+    assert relation_counts(graph, list(range(m)), [(k, l)]).dimension == dimension
+
+
 def test_no_products_means_no_relations():
     # Three marked vertices have no partition into four parts
     graph = Graph(complete_graph(5))

@@ -67,12 +67,15 @@ def parse_product(spec):
 
 def print_relations(graph, marked, args):
     shapes = args.relations
-    print(f'Products : {len(product_terms(graph, marked, shapes))}')
-    print(f'Dimension: {relation_dimension(graph, marked, shapes)}')
     if args.new:
         counts = relation_counts(graph, marked, shapes)
+        print(f'Products : {counts.products}')
+        print(f'Dimension: {counts.dimension}')
         print(f'Inherited: {counts.inherited}')
         print(f'New      : {counts.new}')
+    else:
+        print(f'Products : {len(product_terms(graph, marked, shapes))}')
+        print(f'Dimension: {relation_dimension(graph, marked, shapes)}')
     if args.show_relations:
         for i, relation in enumerate(find_relations(graph, marked, shapes), 1):
             print(f'\nRelation {i}:\n{format_relation(relation)}')

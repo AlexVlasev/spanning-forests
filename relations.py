@@ -72,8 +72,7 @@ def relation_dimension(graph, marked, shapes, extra_points=10, seed=0):
     if not terms:
         return 0
 
-    points = random_points(len(terms) + extra_points, graph.num_edges, seed)
-    _, pivots = reduced_row_echelon(_product_matrix(graph, marked, terms, points), PRIME)
+    _, pivots = _echelon_form(graph, marked, terms, extra_points, seed)
     return len(terms) - len(pivots)
 
 
@@ -123,8 +122,7 @@ def _kernel(graph, marked, terms, extra_points, seed):
     """A basis modulo PRIME of the relations between the terms, one row per relation."""
     if not terms:
         return np.zeros((0, 0), dtype=np.int64)
-    points = random_points(len(terms) + extra_points, graph.num_edges, seed)
-    reduced, pivots = reduced_row_echelon(_product_matrix(graph, marked, terms, points), PRIME)
+    reduced, pivots = _echelon_form(graph, marked, terms, extra_points, seed)
 
     is_pivot = set(pivots)
     free = [c for c in range(len(terms)) if c not in is_pivot]
@@ -132,6 +130,12 @@ def _kernel(graph, marked, terms, extra_points, seed):
     kernel[np.arange(len(free)), free] = 1
     kernel[:, list(pivots)] = -reduced[:, free].T % PRIME
     return kernel
+
+
+def _echelon_form(graph, marked, terms, extra_points, seed):
+    """The reduced rows and pivots modulo PRIME of the values of the terms at random points."""
+    points = random_points(len(terms) + extra_points, graph.num_edges, seed)
+    return reduced_row_echelon(_product_matrix(graph, marked, terms, points), PRIME)
 
 
 def _inherited(graph, marked, factors, total, index, extra_points, seed):
