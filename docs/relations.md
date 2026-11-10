@@ -25,7 +25,7 @@ A relation among products with $r - 1$ factors can be multiplied by any forest p
 1. **The ambient space.** Take all products with the same $r$ and $t$, in every shape. A derivation can pass through shapes outside the ones asked about, so inherited relations have to be built in this larger space. For example, the relation between the shapes `(1, 1, 4)` and `(2, 2, 2)` on four marked vertices is only inherited through the shape `(1, 2, 3)`.
 2. **The inherited space $I$.** For each number of parts $k$, take a basis of the relations among products with $r - 1$ factors and total $t - k$, and multiply each one by each forest polynomial with $k$ parts.
 3. **The target space $X$.** Compute the relations for the shapes asked about, and write them in the ambient coordinates.
-4. **The counts.** The new relations are counted by $\operatorname{rank}(I + X) - \operatorname{rank}(I)$, and the rest of the dimension is inherited.
+4. **The counts.** The new relations are counted by $\text{rank}(I + X) - \text{rank}(I)$, and the rest of the dimension is inherited.
 
 The lower bases are the full relation spaces with $r - 1$ factors, so anything generated from any lower degree is included. Everything is computed modulo one prime. Sampling errors could in principle change the count of new relations in either direction, since they could enlarge both $I$ and $X$, with the same negligible probability as in the README.
 

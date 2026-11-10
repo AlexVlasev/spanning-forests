@@ -22,7 +22,7 @@ The result has one free parameter $x_k$ for each column $k$ without a pivot. Eac
 
 ## What the result guarantees
 
-**A returned solution is the complete solution set of the given equations.** Write $n$ for the number of unknowns. The rank modulo $p$ is at most the rank over the rationals, so the family has dimension $n - \operatorname{rank}_p \ge n - \operatorname{rank}_{\mathbb{Q}}$. Every member of the family satisfies every equation, which was checked exactly, so the family lies inside the solution set. The solution set has dimension $n - \operatorname{rank}_{\mathbb{Q}}$, so the two are equal. This gives the same result as `sympy.linsolve`, which `--exact-solver` uses instead.
+**A returned solution is the complete solution set of the given equations.** Write $n$ for the number of unknowns, $r$ for the rank over the rationals, and $s$ for the rank modulo $p$. Then $s \le r$, so the family has dimension $n - s \ge n - r$. Every member of the family satisfies every equation, which was checked exactly, so the family lies inside the solution set. The solution set has dimension $n - r$, so the two are equal. This gives the same result as `sympy.linsolve`, which `--exact-solver` uses instead.
 
 **"No solution" is not certified in the same way.** It relies on 3 primes agreeing. A false report would need the system to be consistent over the rationals but inconsistent modulo each of those primes, which requires every one of them to divide a denominator of the solution.
 
