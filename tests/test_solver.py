@@ -218,7 +218,7 @@ def test_verify_solution(name, marked, P, Q, balanced, dimension):
     # Changing any nonzero coefficient breaks the identity
     coefficients = solution.coefficients
     pair = next(pair for pair, c in coefficients.items() if c != 0)
-    tampered = Solution(P, Q, {**coefficients, pair: coefficients[pair] + 1})
+    tampered = Solution((P, Q), {**coefficients, pair: coefficients[pair] + 1})
     assert not solver.verify_solution(tampered)
 
 

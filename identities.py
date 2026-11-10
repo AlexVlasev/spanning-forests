@@ -97,7 +97,8 @@ class IdentitySolver:
         """
         # The numbers of parts of the P_i and Q_j, from any pair of patterns
         p, q = next(iter(solution.coefficients))
-        problem = self._problem(solution.P, solution.Q, len(set(p)), len(set(q)))
+        P, Q = solution.product
+        problem = self._problem(P, Q, len(set(p)), len(set(q)))
         return self._verify(problem, solution)
 
     def _verify(self, problem, solution):
@@ -146,7 +147,7 @@ class IdentitySolver:
         if values is None:
             return None
 
-        solution = Solution(P, Q, dict(zip(problem.pairs, values)))
+        solution = Solution((P, Q), dict(zip(problem.pairs, values)))
         if verify:
             # Can only fail if the random points were degenerate
             solution.verified = self._verify(problem, solution)

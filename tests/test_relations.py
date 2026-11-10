@@ -8,9 +8,10 @@ from sympy.polys.matrices import DomainMatrix
 
 from evaluation import evaluate_all, random_points
 from graph import Graph, complete_graph
-from helpers import make_solver
+from helpers import assert_identity, make_solver
 from relations import (
     all_shapes,
+    expand_product,
     find_relations,
     format_relation,
     product_terms,
@@ -48,6 +49,99 @@ TABLE_1 = [
 def test_table_1(m, n, k, l, dimension):
     graph = Graph(complete_graph(n))
     assert relation_dimension(graph, list(range(m)), [(k, l)]) == dimension
+
+
+@pytest.mark.parametrize(
+    'P, Q, n, balanced, shape',
+    [
+        ('1111', '1234', 5, True, (2, 3)),
+        ('1111', '1234', 6, True, (2, 3)),
+        ('11111', '12345', 6, False, (2, 4)),
+        ('11111', '12345', 7, False, (2, 4)),
+        ('1111', '1234', 7, True, (2, 3)),
+    ],
+)
+def test_expand_product_agrees_with_solve_problem(P, Q, n, balanced, shape):
+    solver = make_solver(complete_graph(n), list(range(len(P))))
+    old = solver.solve_problem(P, Q, balanced=balanced)
+    new = expand_product(solver.graph, solver.marked, (P, Q), [shape])
+    assert new.coefficients == old.coefficients
+
+
+def test_expand_product_with_factors_of_more_parts_first():
+    # The P_i have 4 parts and the Q_j have 3, so the factors of each term are swapped
+    solver = make_solver(complete_graph(6), list(range(5)))
+    old = solver.solve_problem('11223', '12134')
+    new = expand_product(solver.graph, solver.marked, ('11223', '12134'), [(3, 4)])
+    assert new.dimension == old.dimension == 64
+    zeros = {symbol: 0 for symbol in new.free_parameters}
+    particular = {term: c.subs(zeros) for term, c in new.coefficients.items()}
+    assert_identity(solver, ('11223', '12134'), particular)
+
+
+def test_expand_product_and_solve_problem_agree_without_a_solution():
+    solver = make_solver(complete_graph(6), list(range(4)))
+    assert solver.solve_problem('1123', '1223') is None
+    assert expand_product(solver.graph, solver.marked, ('1123', '1223'), [(2, 4)]) is None
+
+
+def merged_swaps(coefficients):
+    """The coefficients of ordered pairs, added up over unordered products."""
+    merged = {}
+    for pair, c in coefficients.items():
+        key = tuple(sorted(pair))
+        merged[key] = merged.get(key, 0) + c
+    return merged
+
+
+def test_expand_product_merges_the_swaps_of_solve_problem():
+    solver = make_solver(complete_graph(5), [0, 1, 2])
+    old = solver.solve_problem('111', '123', balanced=True)
+    new = expand_product(solver.graph, solver.marked, ('111', '123'), [(2, 2)])
+    assert old.dimension == new.dimension + math.comb(3, 2)
+    assert merged_swaps(old.coefficients) == new.coefficients
+
+
+def test_expand_product_removes_swaps_from_the_dimension():
+    solver = make_solver(complete_graph(6), list(range(5)))
+    old = solver.solve_problem('11111', '12345', balanced=True)
+    new = expand_product(solver.graph, solver.marked, ('11111', '12345'), [(3, 3)])
+    assert old.dimension == new.dimension + math.comb(25, 2)
+
+
+def test_expand_product_with_three_factors():
+    # The spanning tree formula on the marked vertices, whose 4 triangles are missing
+    graph = Graph(complete_graph(6))
+    product = ('1111', '1234', '1234')
+    solution = expand_product(graph, [0, 1, 2, 3], product, [(3, 3, 3)])
+    assert solution.product == product
+    assert solution.dimension == 0
+    assert sorted(solution.coefficients.values()).count(1) == 16
+    assert sorted(solution.coefficients.values()).count(0) == 40
+
+    total = expand(graph, [0, 1, 2, 3], product)
+    for term, c in solution.coefficients.items():
+        for monomial, d in expand(graph, [0, 1, 2, 3], term).items():
+            total[monomial] -= int(c) * d
+    assert not any(total.values())
+
+
+def test_expand_product_without_a_solution():
+    graph = Graph(complete_graph(5))
+    assert expand_product(graph, [0, 1, 2], ('112', '121'), [(1, 3)]) is None
+
+
+def test_expand_product_without_products():
+    # Three marked vertices have no partition into four parts
+    assert expand_product(Graph(complete_graph(5)), [0, 1, 2], ('123', '123'), [(2, 4)]) is None
+
+
+def test_expand_product_needs_matching_degrees():
+    graph = Graph(complete_graph(4))
+    with pytest.raises(ValueError, match='same number of factors'):
+        expand_product(graph, [0, 1, 2], ('111', '123'), [(2, 3)])
+    with pytest.raises(ValueError, match='same number of factors'):
+        expand_product(graph, [0, 1, 2], ('111', '123'), [(1, 1, 2)])
 
 
 def test_shapes_are_multisets():

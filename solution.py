@@ -1,6 +1,6 @@
 """
-Families of quadratic identities between spanning forest polynomials, as
-found by IdentitySolver.
+Families of identities between products of spanning forest polynomials, as
+found by IdentitySolver and relations.expand_product.
 """
 
 import sympy as sym
@@ -10,17 +10,17 @@ class Solution:
     """
     A family of identities
 
-        phi_P * phi_Q = sum of c(P_i, Q_j) * phi_P_i * phi_Q_j
+        phi_A_1 * ... * phi_A_r = sum of c(B_1, ..., B_s) * phi_B_1 * ... * phi_B_s
 
-    with the coefficients c keyed by (P_i, Q_j) pattern pairs. Coefficients
-    are sympy expressions, affine in the free parameters of the family.
+    with product the tuple of patterns A_i, and the coefficients c keyed by
+    tuples of patterns B_j. Coefficients are sympy expressions, affine in
+    the free parameters of the family.
     verified is True or False once the family has been checked
     symbolically, and None before.
     """
 
-    def __init__(self, P, Q, coefficients, verified=None):
-        self.P = P
-        self.Q = Q
+    def __init__(self, product, coefficients, verified=None):
+        self.product = tuple(product)
         self.coefficients = {pair: sym.sympify(c) for pair, c in coefficients.items()}
         self.verified = verified
 
@@ -41,8 +41,8 @@ class Solution:
         classes = self.classify()
         lines = []
         for title, kind in (('Depd', 'dependent'), ('Fixd', 'fixed'), ('Free', 'free')):
-            for (p, q), value in classes[kind]:
-                lines.append(f'{title}: {p} x {q} = {value}')
+            for term, value in classes[kind]:
+                lines.append(f'{title}: {" x ".join(term)} = {value}')
 
         lines.append('\n====================================\n')
         lines.append(f'Num vars : {len(self.coefficients)}')
@@ -54,11 +54,15 @@ class Solution:
 
     def identity(self):
         """The identity, listing the nonzero terms of the right hand side."""
-        lines = [f'phi_{self.P} * phi_{self.Q} =']
-        for (p, q), c in self.coefficients.items():
+        lines = [f'{_format_product(self.product)} =']
+        for term, c in self.coefficients.items():
             if c != 0:
-                lines.append(f'    + ({c}) * phi_{p} * phi_{q}')
+                lines.append(f'    + ({c}) * {_format_product(term)}')
         return '\n'.join(lines)
+
+
+def _format_product(patterns):
+    return ' * '.join(f'phi_{pattern}' for pattern in patterns)
 
 
 def classify(values):

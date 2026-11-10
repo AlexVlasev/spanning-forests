@@ -10,6 +10,7 @@ Examples:
     python main.py --relations 2,2,3 --marked 0,1,2,3 --graph K6
     python main.py --relations 1,3 2,2 --marked 0,1,2 --graph K5 --show-relations
     python main.py --relations 1,4,4 3,3,3 --marked 0,1,2,3 --sweep 8
+    python main.py --relations 3,3,3 --product 1111,1234,1234 --marked 0,1,2,3 --graph K6
 """
 
 import argparse
@@ -20,6 +21,7 @@ from time import time
 from graph import Graph, complete_graph
 from identities import IdentitySolver
 from relations import (
+    expand_product,
     find_relations,
     format_relation,
     product_terms,
@@ -59,6 +61,10 @@ def parse_shape(spec):
         raise argparse.ArgumentTypeError(f'expected numbers of parts like 2,3, got {spec!r}')
 
 
+def parse_product(spec):
+    return tuple(spec.split(','))
+
+
 def print_relations(graph, marked, args):
     shapes = args.relations
     print(f'Products : {len(product_terms(graph, marked, shapes))}')
@@ -82,6 +88,20 @@ def print_sweep(marked, shapes, largest):
             f'{counts.inherited:>11}{counts.new:>7}',
             flush=True,
         )
+
+
+def print_solution(solution):
+    print('\n====================================\n')
+    if solution is None:
+        print('No Solution')
+    else:
+        print(solution.report())
+        print('\n====================================\n')
+        print(solution.identity())
+        if solution.verified is True:
+            print('\nVerified symbolically')
+        elif solution.verified is False:
+            print('\nSymbolic verification FAILED')
 
 
 def main(argv=None):
@@ -145,6 +165,12 @@ def main(argv=None):
         metavar='N',
         help='with --relations, instead of --graph, print the counts on complete graphs up to K_N',
     )
+    parser.add_argument(
+        '--product',
+        type=parse_product,
+        metavar='PATTERNS',
+        help='with --relations, expand this product, like 1111,1234,1234, in those shapes',
+    )
     parser.add_argument('-q', '--quiet', action='store_true', help='hide progress messages')
     args = parser.parse_args(argv)
 
@@ -152,11 +178,16 @@ def main(argv=None):
         if args.P is not None or args.marked is None:
             parser.error('--relations needs --marked, and takes no P or Q')
         marked = args.marked
+        if args.product is not None:
+            if args.show_relations or args.new or args.sweep is not None or args.verify:
+                parser.error('--product takes no --show-relations, --new, --sweep or --verify')
+            if any(len(pattern) != len(marked) for pattern in args.product):
+                parser.error('every pattern of --product needs one digit per marked vertex')
     else:
         if args.P is None or args.Q is None:
             parser.error('expected P and Q, or --relations')
-        if args.show_relations or args.new or args.sweep is not None:
-            parser.error('--show-relations, --new and --sweep need --relations')
+        if args.show_relations or args.new or args.sweep is not None or args.product is not None:
+            parser.error('--show-relations, --new, --sweep and --product need --relations')
         marked = args.marked if args.marked is not None else list(range(len(args.P)))
         if not len(args.P) == len(args.Q) == len(marked):
             parser.error('P, Q and the marked vertices must have the same length')
@@ -173,6 +204,11 @@ def main(argv=None):
     start = time()
     if args.relations is not None:
         try:
+            if args.product is not None:
+                solution = expand_product(Graph(args.graph), marked, args.product, args.relations)
+                print_solution(solution)
+                print(f'\nComputation took: {time() - start:.2f} sec')
+                return 0 if solution is not None else 1
             if args.sweep is not None:
                 print_sweep(marked, args.relations, args.sweep)
             else:
@@ -191,17 +227,7 @@ def main(argv=None):
         modular=not args.exact_solver,
     )
 
-    print('\n====================================\n')
-    if solution is None:
-        print('No Solution')
-    else:
-        print(solution.report())
-        print('\n====================================\n')
-        print(solution.identity())
-        if solution.verified is True:
-            print('\nVerified symbolically')
-        elif solution.verified is False:
-            print('\nSymbolic verification FAILED')
+    print_solution(solution)
 
     print(f'\nComputation took: {time() - start:.2f} sec')
     return 0 if solution is not None and solution.verified is not False else 1

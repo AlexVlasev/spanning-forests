@@ -4,9 +4,10 @@ The spaces of linear relations
     sum of c(A_1, ..., A_r) * phi_A_1 * ... * phi_A_r = 0
 
 between products of spanning forest polynomials, where each product has a
-shape: the multiset of the numbers of parts of its partitions. There is no
-fixed left hand side, unlike the identities of identities.py, and products
-are unordered, since the factors commute.
+shape: the multiset of the numbers of parts of its partitions. Products are
+unordered, since the factors commute. Unlike the identities of identities.py
+there is no fixed left hand side, except in expand_product, which allows any
+number of factors.
 """
 
 import itertools
@@ -18,6 +19,7 @@ import numpy as np
 
 from evaluation import EVALUATION_PRIMES, evaluate_all_numpy, random_points
 from modular import reduced_row_echelon, solve_modular
+from solution import Solution
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +38,7 @@ def product_terms(graph, marked, shapes):
     only agree on graphs of one size.
     """
     shapes = sorted({tuple(sorted(shape)) for shape in shapes})
-    if len({(len(shape), sum(shape)) for shape in shapes}) > 1:
-        raise ValueError('every shape needs the same number of factors and total number of parts')
+    _check_shapes(shapes)
 
     terms = []
     for shape in shapes:
@@ -47,6 +48,11 @@ def product_terms(graph, marked, shapes):
         ]
         terms += [sum(choice, ()) for choice in itertools.product(*choices)]
     return terms
+
+
+def _check_shapes(shapes):
+    if len({(len(shape), sum(shape)) for shape in shapes}) > 1:
+        raise ValueError('every shape needs the same number of factors and total number of parts')
 
 
 def relation_dimension(graph, marked, shapes, extra_points=10, seed=0):
@@ -172,6 +178,33 @@ def find_relations(graph, marked, shapes, extra_points=10, seed=0):
     return [_primitive(relations[symbol]) for symbol in ordered]
 
 
+def expand_product(graph, marked, product, shapes, extra_points=10, seed=0):
+    """
+    Finds the family of identities
+
+        product of phi_A = sum of c(term) * (product of the phi of the term)
+
+    over every term of product_terms for the shapes, from random evaluations,
+    as a Solution keyed by those terms, or None if there is none. The product
+    is a sequence of patterns, whose shape must have the same number of
+    factors and total number of parts as the shapes.
+
+    The unknowns are unordered products, unlike IdentitySolver.solve_problem,
+    so when two factors have the same number of parts its family is larger,
+    by the swaps of those factors.
+    """
+    product = tuple(product)
+    _check_shapes([tuple(len(set(pattern)) for pattern in product), *shapes])
+    terms = product_terms(graph, marked, shapes)
+    logger.info(f'Solving for {len(terms)} unknowns')
+    if not terms:
+        return None
+
+    points = random_points(len(terms) + extra_points, graph.num_edges, seed)
+    values = solve_modular(_exact_equations(graph, marked, terms, points, product), len(terms))
+    return None if values is None else Solution(product, dict(zip(terms, values)))
+
+
 def format_relation(relation):
     """A relation from find_relations with one term per line, as printed by the command line."""
     lines = []
@@ -195,13 +228,18 @@ def _patterns(terms):
     return sorted(set(itertools.chain.from_iterable(terms)))
 
 
-def _exact_equations(graph, marked, terms, points):
-    """The (row, constant) equations, with exact values of the products at each point."""
-    values = {
-        p: evaluate_all_numpy(graph.forest_polynomial(marked, p), points) for p in _patterns(terms)
-    }
+def _exact_equations(graph, marked, terms, points, product=None):
+    """
+    The (row, constant) equations, with exact values of the products at each
+    point. The constant is the value of the given product, and 0 without one.
+    """
+    patterns = _patterns([*terms, product]) if product else _patterns(terms)
+    values = {p: evaluate_all_numpy(graph.forest_polynomial(marked, p), points) for p in patterns}
     return [
-        (tuple(math.prod(values[p][i] for p in term) for term in terms), 0)
+        (
+            tuple(math.prod(values[p][i] for p in term) for term in terms),
+            math.prod(values[p][i] for p in product) if product else 0,
+        )
         for i in range(len(points))
     ]
 

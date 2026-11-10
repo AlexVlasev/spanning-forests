@@ -37,6 +37,8 @@ The command line takes the partitions $P$ and $Q$ as patterns, a graph as `K<n>`
 
 With `--relations`, it instead takes one or more shapes and prints the dimension of the space of linear relations between all products of forest polynomials with those shapes. A shape lists the number of parts of each factor, so `2,2,3` is a product of three forest polynomials. Mixed shapes need the same number of factors and the same total number of parts. `--show-relations` also prints a basis of the relations, with coprime integer coefficients. `--new` splits the dimension into relations inherited from fewer factors, which are a relation with one factor fewer times any forest polynomial, and new ones. `--sweep N` prints these counts on complete graphs up to $K_N$, in place of `--graph`.
 
+With `--relations` and `--product`, it expands a fixed product of any number of factors in the products with the given shapes, and prints the solution family and identity as for $P$ and $Q$. For example, `--relations 3,3,3 --product 1111,1234,1234 --marked 0,1,2,3 --graph K6` writes a product of three forest polynomials in terms of three-part partitions. Products are unordered here, so when two factors on the right have the same number of parts, the family is smaller than the one from $P$ and $Q$ by the swaps of those factors. Otherwise the two searches give the same family.
+
 From Python:
 
 ```python
@@ -120,7 +122,7 @@ For comparison, the original version took about 8 s on the $K_6$ search and 40 s
 
 ### Of the code
 
-- **Shape of the identities.** Only identities $\Phi^P \Phi^Q = \sum c_{ij} \Phi^{P_i} \Phi^{Q_j}$ are searched, where all the $P_i$ have the same number of parts, and so do all the $Q_j$. The two choices of sizes are the default ($|P| + 1$ and $|Q| - 1$) and `balanced`. Other shapes, such as mixed sizes or products of three polynomials, would need changes to `IdentitySolver.problem`.
+- **Shape of the identities.** Only identities $\Phi^P \Phi^Q = \sum c_{ij} \Phi^{P_i} \Phi^{Q_j}$ are searched, where all the $P_i$ have the same number of parts, and so do all the $Q_j$. The two choices of sizes are the default ($|P| + 1$ and $|Q| - 1$) and `balanced`. Other shapes, such as mixed sizes or products of three polynomials, are handled by `--product`, which has no symbolic `--verify` yet.
 - **At most 9 parts.** Patterns label parts with single digits, so partitions with more than 9 parts are rejected. This limits the number of parts, not the number of vertices.
 - **Simple graphs.** Graphs are 0/1 adjacency matrices: undirected, without multiple edges, loops or edge weights. A disconnected graph has no spanning trees, so all its forest polynomials are empty.
 - **The search is probabilistic.** The random points use a fixed seed, so results are reproducible, and a wrong result would need a vanishingly unlikely degenerate choice of points. Use `--verify` to prove a family symbolically.
@@ -142,8 +144,8 @@ The sizes involved grow combinatorially, both in the graph and in the number of 
 - `evaluation.py`: the linear system from exact evaluations at random points, modulo a few primes, with the Chinese remainder theorem.
 - `equations.py`: the exact linear system from expanding every product, in chunks, with NumPy or pure Python.
 - `modular.py`: solves linear systems by row reduction modulo primes, recovering the exact rational solution.
-- `relations.py`: the dimension of the space of linear relations between products of forest polynomials with fixed numbers of parts, inspired by the spaces of spanning forest identities in (Choi and Yeats, 2026[^choi2026]).
-- `solution.py`: the `Solution` class for a family of identities, with its report.
+- `relations.py`: the dimension of the space of linear relations between products of forest polynomials with fixed numbers of parts, and the expansion of a fixed product in such products, inspired by the spaces of spanning forest identities in (Choi and Yeats, 2026[^choi2026]).
+- `solution.py`: the `Solution` class for a family of identities between products, with its report.
 - `main.py`: the command line interface.
 - `polynomial.py`: `MultilinearPolynomial`, which stores each monomial as a bitmask of its edges and is used for all spanning forest polynomials, and a general `Polynomial` class for display.
 - `tests/`: checks against brute-force forest enumeration, known identities, and the matrix-tree theorem.

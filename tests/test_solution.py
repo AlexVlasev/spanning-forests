@@ -4,8 +4,7 @@ from solution import Solution
 
 x, y = sympy.symbols('x_0 x_1')
 SOLUTION = Solution(
-    '111',
-    '123',
+    ('111', '123'),
     {('122', '121'): 1 - x, ('121', '122'): x, ('122', '122'): 0, ('112', '121'): 2},
 )
 
@@ -13,7 +12,7 @@ SOLUTION = Solution(
 def test_free_parameters_and_dimension():
     assert SOLUTION.free_parameters == [x]
     assert SOLUTION.dimension == 1
-    assert Solution('11', '12', {('12', '11'): 1}).dimension == 0
+    assert Solution(('11', '12'), {('12', '11'): 1}).dimension == 0
 
 
 def test_report():
