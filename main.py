@@ -221,13 +221,16 @@ def main(argv=None):
         return 0
 
     solver = IdentitySolver(Graph(args.graph), marked)
-    solution = solver.solve_problem(
-        args.P,
-        args.Q,
-        balanced=args.balanced,
-        verify=args.verify,
-        modular=not args.exact_solver,
-    )
+    try:
+        solution = solver.solve_problem(
+            args.P,
+            args.Q,
+            balanced=args.balanced,
+            verify=args.verify,
+            modular=not args.exact_solver,
+        )
+    except ValueError as error:
+        parser.error(str(error))
 
     print_solution(solution)
 

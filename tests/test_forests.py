@@ -1,6 +1,6 @@
 import pytest
 
-from graph import Graph
+from graph import Graph, check_pattern
 from helpers import GRAPHS, brute_force_forests, monomials
 
 CASES = [
@@ -54,6 +54,41 @@ def test_forest_polynomials_are_cached():
 def test_forest_polys_with_arbitrary_marked_vertices(name, marked):
     for k in range(1, len(marked) + 1):
         assert_forest_polys_match(GRAPHS[name], marked, k)
+
+
+@pytest.mark.parametrize('pattern', ['2111', '1324', '0123', 'abcd', '111', '11111', '1 23'])
+def test_forest_polynomial_rejects_patterns_not_in_standard_form(pattern):
+    with pytest.raises(ValueError, match='order of first appearance'):
+        Graph(GRAPHS['K5']).forest_polynomial([0, 1, 2, 3], pattern)
+
+
+def test_check_pattern_accepts_standard_form():
+    for pattern in ('1', '1111', '1213', '1231', '123456789'):
+        check_pattern(pattern, len(pattern))
+
+
+def test_check_pattern_rejects_ten_parts():
+    with pytest.raises(ValueError, match='order of first appearance'):
+        check_pattern('12345678910', 11)
+
+
+@pytest.mark.parametrize(
+    'marked, message',
+    [
+        ([0, 1, 1], 'distinct'),
+        ([0, 1, 5], 'no vertex 5'),
+        ([0, 1, -1], 'no vertex -1'),
+    ],
+)
+def test_marked_vertices_are_checked(marked, message):
+    graph = Graph(GRAPHS['K5'])
+    with pytest.raises(ValueError, match=message):
+        graph.forest_polynomials(marked, 2)
+    with pytest.raises(ValueError, match=message):
+        graph.forest_polynomial(marked, '112')
+    # The tree polynomial does not depend on the marked vertices, but is still checked
+    with pytest.raises(ValueError, match=message):
+        graph.forest_polynomial(marked, '111')
 
 
 @pytest.mark.parametrize('num_parts', [0, 10])

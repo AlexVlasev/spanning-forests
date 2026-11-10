@@ -22,6 +22,17 @@ def complete_graph(n):
     return [[0 if i == j else 1 for j in range(n)] for i in range(n)]
 
 
+def check_pattern(pattern, num_marked):
+    """Raises a ValueError unless pattern is a partition of num_marked vertices in standard form."""
+    labels = dict()
+    standard = ''.join(labels.setdefault(c, str(len(labels) + 1)) for c in pattern)
+    if pattern != standard or len(pattern) != num_marked:
+        raise ValueError(
+            f'expected {num_marked} digits numbering the parts in order of first appearance, '
+            f'like 1213, got {pattern!r}'
+        )
+
+
 class Graph:
     def __init__(self, matrix):
         self.num_vertices = len(matrix)
@@ -130,6 +141,7 @@ class Graph:
         whose marked vertices span fewer than k trees has a tree without any
         marked vertex, so it belongs to no pattern.
         """
+        self._check_marked(marked)
         # Patterns label parts with single digits
         if not 1 <= num_parts <= MAX_PARTS:
             raise ValueError(f'expected 1 to {MAX_PARTS} parts, got {num_parts}')
@@ -139,6 +151,13 @@ class Graph:
             self._forest_polynomials[key] = self._compute_forest_polynomials(marked, num_parts)
         # A copy, so that callers cannot change the cached dict
         return dict(self._forest_polynomials[key])
+
+    def _check_marked(self, marked):
+        if len(set(marked)) != len(marked):
+            raise ValueError(f'marked vertices must be distinct, got {list(marked)}')
+        for v in marked:
+            if not 0 <= v < self.num_vertices:
+                raise ValueError(f'the graph has no vertex {v}')
 
     def _compute_forest_polynomials(self, marked, num_parts):
         if self.num_edges <= 64 and self.trees:
@@ -188,7 +207,8 @@ class Graph:
         The spanning forest polynomial of a single partition of the marked
         vertices, which is empty if no spanning forest induces it.
         """
-        assert len(pattern) == len(marked)
+        check_pattern(pattern, len(marked))
+        self._check_marked(marked)
         if set(pattern) == {'1'}:
             return self.tree_poly
         polys = self.forest_polynomials(marked, len(set(pattern)))

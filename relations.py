@@ -20,6 +20,7 @@ import numpy as np
 
 from equations import expansion_equations
 from evaluation import EVALUATION_PRIMES, evaluate_all_numpy, random_points
+from graph import check_pattern
 from modular import reduced_row_echelon, solve_modular
 from solution import Solution
 
@@ -198,6 +199,8 @@ def expand_product(graph, marked, product, shapes, verify=False, extra_points=10
     by the swaps of those factors.
     """
     product = tuple(product)
+    for pattern in product:
+        check_pattern(pattern, len(marked))
     _check_shapes([tuple(len(set(pattern)) for pattern in product), *shapes])
     terms = product_terms(graph, marked, shapes)
     logger.info(f'Solving for {len(terms)} unknowns')

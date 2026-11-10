@@ -139,6 +139,13 @@ def test_expand_product_without_products():
     assert expand_product(Graph(complete_graph(5)), [0, 1, 2], ('123', '123'), [(2, 4)]) is None
 
 
+def test_expand_product_rejects_patterns_not_in_standard_form():
+    # Three marked vertices have no four-part partitions, so there are no products to evaluate
+    graph = Graph(complete_graph(5))
+    with pytest.raises(ValueError, match='order of first appearance'):
+        expand_product(graph, [0, 1, 2], ('211', '123'), [(2, 4)])
+
+
 def test_expand_product_needs_matching_degrees():
     graph = Graph(complete_graph(4))
     with pytest.raises(ValueError, match='same number of factors'):
