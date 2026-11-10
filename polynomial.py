@@ -1,6 +1,3 @@
-from math import sqrt
-
-
 class Polynomial:
     def __init__(self, variables, coefficients):
         self.variables = variables if variables else []
@@ -68,29 +65,20 @@ class Polynomial:
 
     def __eq__(self, other):
         if isinstance(other, int) or isinstance(other, float):
-            return not self.coefficients
+            constant = {tuple(0 for _ in self.variables): other} if other else dict()
+            return self._nonzero() == constant
         if not isinstance(other, Polynomial):
-            raise Exception(f'Not a polynomial: {type(other)}')
+            return NotImplemented
         if self.variables != other.variables:
             raise Exception('Not implemented yet')
 
-        ps = set(self.coefficients.keys())
-        other_ps = set(other.coefficients.keys())
-        if ps != other_ps:
-            return False
-        for p in ps:
-            if self.coefficients[p] != other.coefficients[p]:
-                return False
-        return True
+        return self._nonzero() == other._nonzero()
+
+    def _nonzero(self):
+        """The coefficients without the ones that have cancelled to 0."""
+        return {p: c for p, c in self.coefficients.items() if c != 0}
 
     def __repr__(self):
-        # parts = [
-        #     'Polynomial(',
-        #     f'vars={self.variables}, ',
-        #     f'coeffs={str(self.coefficients)}',
-        #     ')',
-        # ]
-        # return ''.join(parts)
         return str(self)
 
     def __monomial(self, power):
@@ -144,9 +132,6 @@ class Polynomial:
                 index = i
         if index == -1:
             return self
-
-        variables = self.variables.copy()
-        variables.pop(index)
 
         coefficients = dict()
         for p, c in self.coefficients.items():
@@ -234,49 +219,3 @@ def edge_indices(mask):
         indices.append(low.bit_length() - 1)
         mask ^= low
     return tuple(indices)
-
-
-if __name__ == '__main__':
-    # variables = ['x', 'y']
-    # P = Polynomial(variables, {(1, 0): 2, (0, 1): 3, (1, 1): 1})
-    # # Q = Polynomial(variables, {(0, 0): 1, (0, 1): 2})
-
-    # print(P)
-
-    # Pc = P.collect(1)
-    # print(Pc)
-
-    # N = 7
-    # variables = ['u']
-    # u = Polynomial(variables, {(1,0): 1})
-    # y = u
-    # for i in range(N):
-    #     y = (u + y*y).truncate('u', i+1)
-    #     print(y)
-
-    N = 16
-    variables = ['x']
-    u = Polynomial(variables, {(2, 0): 0.5})
-    y = u
-    for i in range(N):
-        y = (u + y * y).truncate('x', 2 * i)
-        # print(y)
-
-    coefficients = dict()
-    for p, value in y.coefficients.items():
-        coefficients[p] = value / (p[0] + 1)
-    integral = Polynomial(variables, coefficients) * Polynomial(variables, {(1,): 1})
-    print(integral.apply('x', 1))
-
-    variables = ['x']
-    u = Polynomial(variables, {(2, 0): 1})
-    y = u
-    for i in range(N):
-        y = (u + y * y).truncate('x', 2 * i)
-        # print(y)
-
-    coefficients = dict()
-    for p, value in y.coefficients.items():
-        coefficients[p] = value / (p[0] + 1)
-    integral = Polynomial(variables, coefficients) * Polynomial(variables, {(1,): 1})
-    print(integral.apply('x', 1 / sqrt(2)) * sqrt(2))
